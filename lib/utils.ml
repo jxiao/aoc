@@ -1,0 +1,1 @@
+let print_list f = List.iter (fun v -> f v |> print_endline)
