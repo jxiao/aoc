@@ -10,3 +10,8 @@ let day2 = "files/day2.txt";;
 
 Aoc.Day2.part_one_result day2 |> print_result 2 1;;
 Aoc.Day2.part_two_result day2 |> print_result 2 2
+
+let day3 = "files/day3.txt";;
+
+Aoc.Day3.part_one day3 |> print_result 3 1;;
+Aoc.Day3.part_two day3 |> print_result 3 2
