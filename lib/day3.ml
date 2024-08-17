@@ -31,12 +31,6 @@ open Utils
 *)
 
 let is_digit = function '0' .. '9' -> true | _ -> false
-
-let digit_opt c =
-  match c with
-  | '0' .. '9' -> Some (int_of_char c - int_of_char '0')
-  | _ -> None
-
 let is_symbol = function '0' .. '9' | '.' -> false | _ -> true
 
 module Tup = struct
@@ -100,7 +94,7 @@ let part_one file =
       lines
   in
   sum row_scores
-  
+
 (*
    --- Part Two ---
    The engineer finds the missing part and installs it in the engine! As the engine springs to life, you jump in the closest gondola, finally ready to ascend to the water source.
