@@ -48,46 +48,47 @@ end
 module TSet = Set.Make (Tup)
 
 let symbol_positions lines =
-  let rec parse_line r c l set =
+  let rec parse_row r c l set =
     match l with
     | [] -> set
     | h :: t ->
-        parse_line r (c + 1) t
-          (if is_symbol h then TSet.add (r, c) set else set)
+        parse_row r (c + 1) t (if is_symbol h then TSet.add (r, c) set else set)
   in
-  let rec build r l set =
+  let rec parse_rows r l set =
     match l with
     | [] -> set
-    | h :: t -> parse_line r 0 (char_list_of_string h) set |> build (r + 1) t
+    | h :: t ->
+        parse_row r 0 (char_list_of_string h) set |> parse_rows (r + 1) t
   in
-  build 0 lines TSet.empty
+  parse_rows 0 lines TSet.empty
 
 let adjs =
   List.fold_left
     (fun acc r -> acc @ List.map (fun c -> (r, c)) [ -1; 0; 1 ])
     [] [ -1; 0; 1 ]
 
-let adj_sym positions r c =
+let adj_to_sym positions r c =
   let rec acc = function
     | [] -> false
     | (dr, dc) :: t -> TSet.mem (r + dr, c + dc) positions || acc t
   in
   acc adjs
 
-let rec traverse line positions acc should_add sum r c =
+let rec traverse line positions acc should_add sum (r, c) =
   match line with
   | [] -> sum + if should_add then acc else 0
   | h :: t -> (
       match digit_opt h with
       | Some d ->
-          let is_adj_sym = adj_sym positions r c in
+          let is_adj_sym = adj_to_sym positions r c in
           traverse t positions
             ((acc * 10) + d)
-            (is_adj_sym || should_add) sum r (c + 1)
+            (is_adj_sym || should_add) sum
+            (r, c + 1)
       | None ->
           traverse t positions 0 false
             (sum + if should_add then acc else 0)
-            r (c + 1))
+            (r, c + 1))
 
 let part_one file =
   let lines = file_lines file in
@@ -95,14 +96,11 @@ let part_one file =
   let row_scores =
     List.mapi
       (fun i line ->
-        traverse (char_list_of_string line) positions 0 false 0 i 0)
+        traverse (char_list_of_string line) positions 0 false 0 (i, 0))
       lines
   in
-  (* print_list (fun v -> Printf.sprintf "%d -" v) row_scores; *)
-  let score = List.fold_left ( + ) 0 row_scores in
-  (* Printf.printf "Final score: %i\n%!" score; *)
-  score
-
+  sum row_scores
+  
 (*
    --- Part Two ---
    The engineer finds the missing part and installs it in the engine! As the engine springs to life, you jump in the closest gondola, finally ready to ascend to the water source.
@@ -134,11 +132,13 @@ let part_one file =
 
 let is_star = ( = ) '*'
 
-(* map from tuple position to tuple of id and value *)
 module TMap = Map.Make (Tup)
 
-let num_mappings lines =
-  let rec parse_line line r c mapping positions acc next_id =
+(** [num_positions lines] is the mapping from [(r,c)] coordinate to 
+    [(id, value)], where [id] is a unique id per number and [value] represents 
+    the number itself (which can span multiple coordinate positions. *)
+let num_positions lines =
+  let rec parse_row line (r, c) mapping positions acc next_id =
     match line with
     | [] ->
         ( List.fold_left
@@ -148,28 +148,31 @@ let num_mappings lines =
     | h :: t -> (
         match digit_opt h with
         | None ->
-            parse_line t r (c + 1)
+            parse_row t
+              (r, c + 1)
               (List.fold_left
                  (fun res tup -> TMap.add tup (next_id, acc) res)
                  mapping positions)
               [] 0 (next_id + 1)
         | Some d ->
-            parse_line t r (c + 1) mapping ((r, c) :: positions)
+            parse_row t
+              (r, c + 1)
+              mapping ((r, c) :: positions)
               ((acc * 10) + d)
               next_id)
   in
-  let rec line_by_line lines mapping r next_id =
+  let rec parse_rows lines mapping r next_id =
     match lines with
     | [] -> mapping
     | h :: t ->
         let mapping', next_id' =
-          parse_line (char_list_of_string h) r 0 mapping [] 0 next_id
+          parse_row (char_list_of_string h) (r, 0) mapping [] 0 next_id
         in
-        line_by_line t mapping' (r + 1) next_id'
+        parse_rows t mapping' (r + 1) next_id'
   in
-  line_by_line lines TMap.empty 0 0
+  parse_rows lines TMap.empty 0 0
 
-let get_surrounding_nums r c mappings =
+let get_surrounding_nums (r, c) mappings =
   let rec build l set =
     match l with
     | [] -> set
@@ -181,29 +184,27 @@ let get_surrounding_nums r c mappings =
   in
   build adjs TSet.empty
 
-let rec traverse' line acc mappings r c =
-  match line with
+let rec gear_ratio_for_row row acc mappings (r, c) =
+  match row with
   | [] -> acc
   | h :: t ->
-      let acc' =
+      let gear_ratio =
         if is_star h then
-          let adj_set = get_surrounding_nums r c mappings in
+          let adj_set = get_surrounding_nums (r, c) mappings in
           if TSet.cardinal adj_set = 2 then
             TSet.fold (fun (_, v) res -> v * res) adj_set 1
           else 0
         else 0
       in
-      traverse' t acc' mappings r (c + 1)
+      gear_ratio_for_row t (acc + gear_ratio) mappings (r, c + 1)
 
 let part_two file =
   let lines = file_lines file in
-  let mappings = num_mappings lines in
+  let mappings = num_positions lines in
   let row_scores =
     List.mapi
-      (fun i line -> traverse' (char_list_of_string line) 0 mappings i 0)
+      (fun i line ->
+        gear_ratio_for_row (char_list_of_string line) 0 mappings (i, 0))
       lines
   in
-  print_list (fun v -> Printf.sprintf "%d -" v) row_scores;
-  let score = List.fold_left ( + ) 0 row_scores in
-  Printf.printf "Final score: %i\n%!" score;
-  score
+  sum row_scores

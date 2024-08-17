@@ -1,5 +1,6 @@
 let print_list f = List.iter (fun v -> f v |> print_endline)
 let char_list_of_string s = s |> String.to_seq |> List.of_seq
+let sum = List.fold_left ( + ) 0
 
 let file_lines name =
   let channel = open_in name in
