@@ -97,6 +97,7 @@ open Utils
 *)
 
 type prop =
+  | Initial
   | Seed
   | Soil
   | Fertilizer
@@ -124,9 +125,8 @@ module PMap = Map.Make (Prop)
 module IMap = Map.Make (Int)
 module TPMap = Map.Make (TupleProp)
 
-(* PMap (Prop, List (int * int*int))) *)
-
 let next = function
+  | Initial -> Seed
   | Seed -> Soil
   | Soil -> Fertilizer
   | Fertilizer -> Water
@@ -134,7 +134,7 @@ let next = function
   | Light -> Temperature
   | Temperature -> Humidity
   | Humidity -> Location
-  | Location -> Seed (* TODO: code smell, wraps around *)
+  | Location -> Invalid_argument "No next prop after Location" |> raise
 
 let extract_nums line =
   String.split_on_char ' ' line |> List.filter_map int_of_string_opt
@@ -165,18 +165,17 @@ let rec bsearch arr lo hi n =
   if hi < lo then n
   else
     let c_idx = lo + ((hi - lo) / 2) in
-    Printf.printf "arr length = %d, (%d,%d,%d)\n%!" (Array.length arr) lo hi c_idx;
     let src, range, dest = arr.(c_idx) in
     if n >= src && n < src + range then dest + (n - src)
-    else if n < src then bsearch arr lo (hi - 1) n
-    else bsearch arr (lo + 1) hi n
+    else if n < src then bsearch arr lo (c_idx - 1) n
+    else bsearch arr (c_idx + 1) hi n
 
 let rec traverse pmap n p =
   match p with
   | Location -> n
   | _ ->
       let arr = PMap.find p pmap in
-      traverse pmap (bsearch arr 0 (Array.length arr) n) (next p)
+      traverse pmap (bsearch arr 0 (Array.length arr - 1) n) (next p)
 
 let part_one file =
   let lines = file_lines file in
@@ -184,7 +183,81 @@ let part_one file =
     match lines with
     | [] -> Invalid_argument "Empty file" |> raise
     | h :: t ->
-        (h |> extract_nums, parse t PMap.empty Location |> sort_and_make_array)
+        (h |> extract_nums, parse t PMap.empty Initial |> sort_and_make_array)
   in
   let locations = List.map (fun seed -> traverse pmap seed Seed) seeds in
   List.fold_left min max_int locations
+
+(*
+   --- Part Two ---
+    Everyone will starve if you only plant such a small number of seeds. Re-reading the almanac, it looks like the seeds: line actually describes ranges of seed numbers.
+
+    The values on the initial seeds: line come in pairs. Within each pair, the first value is the start of the range and the second value is the length of the range. So, in the first line of the example above:
+
+    seeds: 79 14 55 13
+    This line describes two ranges of seed numbers to be planted in the garden. The first range starts with seed number 79 and contains 14 values: 79, 80, ..., 91, 92. The second range starts with seed number 55 and contains 13 values: 55, 56, ..., 66, 67.
+
+    Now, rather than considering four seed numbers, you need to consider a total of 27 seed numbers.
+
+    In the above example, the lowest location number can be obtained from seed number 82, which corresponds to soil 84, fertilizer 84, water 84, light 77, temperature 45, humidity 46, and location 46. So, the lowest location number is 46.
+
+    Consider all of the initial seed numbers listed in the ranges on the first line of the almanac. What is the lowest location number that corresponds to any of the initial seed numbers?
+*)
+
+(* Instead of considering just 1 starting seed at a time (as was the case for part 1), consider "groups"/"ranges" at a time, adding new ranges as we progress through the Props *)
+
+let extract_ranges line =
+  let rec pairs acc l =
+    match l with i :: r :: t -> pairs ((i, i + r - 1) :: acc) t | _ -> acc
+  in
+  pairs [] (extract_nums line)
+
+let rec bs_ranges arr (r_lo, r_hi) (i_lo, i_hi) =
+  if r_lo > r_hi || i_hi < i_lo then []
+  else
+    let c_idx = i_lo + ((i_hi - i_lo) / 2) in
+    let src, range, dest = arr.(c_idx) in
+    let c_lo, c_hi = (src, src + range - 1) in
+    if r_hi < c_lo then bs_ranges arr (r_lo, r_hi) (i_lo, c_idx - 1)
+    else if r_lo > c_hi then bs_ranges arr (r_lo, r_hi) (c_idx + 1, i_hi)
+    else if c_lo <= r_lo && r_hi <= c_hi then
+      (Printf.printf "Encompass: cs: (%d,%d), rs: (%d,%d), dest:%d, src:%d, range:%d\n%!" c_lo c_hi r_lo r_hi dest src range;
+      let offset = dest - src in
+      [ (r_lo+offset, r_hi+offset) ])
+    else
+      let left = bs_ranges arr (r_lo, c_lo - 1) (i_lo, c_idx - 1) in
+      let right = bs_ranges arr (c_hi + 1, r_hi) (c_idx + 1, i_hi) in
+      let offset = dest - src in
+      let mid = [ (r_lo+offset, r_hi+offset) ] in
+      left @ mid @ right
+(* some part is encompassed*)
+(* if r is completely between c, return directly the chunk
+   otherwise, recurse on left end and right end and return middle chunk *)
+
+let rec traverse' pmap l p =
+  print_endline "TOP";
+  print_list (fun (a, b) -> Printf.sprintf "(%d,%d)" a b) l;
+  match p with
+  | Location -> l
+  | _ ->
+      let arr = PMap.find p pmap in
+      let pass =
+        List.fold_left
+          (fun acc t -> bs_ranges arr t (0, Array.length arr - 1) @ acc)
+          [] l
+      in
+      print_endline "POST";
+      print_list (fun (a, b) -> Printf.sprintf "(%d,%d)" a b) pass;
+      traverse' pmap pass (next p)
+
+let part_two file =
+  let lines = file_lines file in
+  let seed_ranges, pmap =
+    match lines with
+    | [] -> Invalid_argument "Empty file" |> raise
+    | h :: t ->
+        (h |> extract_ranges, parse t PMap.empty Initial |> sort_and_make_array)
+  in
+  let ranges = traverse' pmap seed_ranges Seed in
+
+  List.fold_left (fun acc (m, _) -> min acc m) max_int ranges

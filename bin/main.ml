@@ -21,7 +21,7 @@ let day4 = "files/day4.txt";;
 Aoc.Day4.part_one day4 |> print_result 4 1;;
 Aoc.Day4.part_two day4 |> print_result 4 2
 
-let day5 = "files/day4.txt";;
+let day5 = "files/day5.txt";;
 
 Aoc.Day5.part_one day5 |> print_result 5 1;;
-(* Aoc.Day4.part_two day5 |> print_result 4 2 *)
+Aoc.Day5.part_two day5 |> print_result 5 2
