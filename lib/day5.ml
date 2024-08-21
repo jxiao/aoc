@@ -213,6 +213,7 @@ let extract_ranges line =
   pairs [] (extract_nums line)
 
 let rec bs_ranges arr (r_lo, r_hi) (i_lo, i_hi) =
+  (* TODO: if out of range, map to itself *)
   if r_lo > r_hi || i_hi < i_lo then []
   else
     let c_idx = i_lo + ((i_hi - i_lo) / 2) in
@@ -228,7 +229,7 @@ let rec bs_ranges arr (r_lo, r_hi) (i_lo, i_hi) =
       let left = bs_ranges arr (r_lo, c_lo - 1) (i_lo, c_idx - 1) in
       let right = bs_ranges arr (c_hi + 1, r_hi) (c_idx + 1, i_hi) in
       let offset = dest - src in
-      let mid = [ (r_lo+offset, r_hi+offset) ] in
+      let mid = [ (r_lo+offset, r_hi+offset) ] in 
       left @ mid @ right
 (* some part is encompassed*)
 (* if r is completely between c, return directly the chunk
