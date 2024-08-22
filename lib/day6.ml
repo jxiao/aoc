@@ -1,3 +1,4 @@
+open Utils
 (*
    --- Day 6: Wait For It ---
    The ferry quickly brings you across Island Island. After asking around, you discover that there is indeed normally a large pile of sand somewhere near here, but you don't see anything besides lots of water and the small island where the ferry has docked.
@@ -41,3 +42,48 @@
 
    Determine the number of ways you could beat the record in each race. What do you get if you multiply these numbers together?
 *)
+
+(* @jxiao: how would you implement [sqrt] from scratch? *)
+
+let solve_quad a b c =
+  let root = (b * b) - (4 * a * c) |> float_of_int |> sqrt in
+  let neg_b = -1. *. float_of_int b in
+  let lo, hi = ((neg_b -. root) /. 2., (neg_b +. root) /. 2.) in
+  (lo, hi)
+
+let solve_quad_ineq a b c =
+  let lo, hi = solve_quad a b c in
+  ( (ceil lo +. if lo = ceil lo then 1. else 0.) |> int_of_float,
+    (floor hi -. if hi = floor hi then 1. else 0.) |> int_of_float )
+
+let possibilities times distances =
+  let rec possibilities_rec ts ds acc =
+    match (ts, ds) with
+    | [], [] -> acc
+    | ht :: tt, hd :: td ->
+        let lo, hi = solve_quad_ineq 1 (-1 * ht) hd in
+        let ans = hi - lo + 1 in
+        possibilities_rec tt td (ans :: acc)
+    | _, _ ->
+        Invalid_argument "Times and distances lists must have the same length."
+        |> raise
+  in
+  possibilities_rec times distances []
+
+let part_one file =
+  let lines = file_lines file in
+  let results =
+    match lines with
+    | [ tl; dl ] ->
+        let times =
+          String.split_on_char ' ' tl |> List.filter_map int_of_string_opt
+        in
+        let distances =
+          String.split_on_char ' ' dl |> List.filter_map int_of_string_opt
+        in
+        possibilities times distances
+    | _ ->
+        Invalid_argument "Input file must only provide a time and distance line"
+        |> raise
+  in
+  List.fold_left (fun acc x -> acc * x) 1 results
