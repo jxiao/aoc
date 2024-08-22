@@ -243,8 +243,6 @@ let rec bs_ranges arr (r_lo, r_hi) (i_lo, i_hi) =
       left @ mid @ right
 
 let rec traverse' pmap l p =
-  (* print_endline ("-----------------\nTOP of " ^ string_of_prop p);
-     print_list (fun (a, b) -> Printf.sprintf "(%d,%d)" a b) l; *)
   match p with
   | Location -> l
   | _ ->
@@ -253,14 +251,9 @@ let rec traverse' pmap l p =
         List.fold_left
           (fun acc t ->
             let res = bs_ranges arr t (0, Array.length arr - 1) in
-            (* Printf.printf "[%d,%d] is adding: %!" (fst t) (snd t);
-               print_list (fun (a, b) -> Printf.sprintf "(%d,%d)" a b) res; *)
             acc @ res)
           [] l
       in
-      (* print_endline ("POST of " ^ string_of_prop p);
-         print_list (fun (a, b) -> Printf.sprintf "(%d,%d)" a b) pass;
-         print_endline "-----------------"; *)
       traverse' pmap pass (next p)
 
 let part_two file =
@@ -274,75 +267,3 @@ let part_two file =
   let ranges = traverse' pmap seed_ranges Seed in
 
   List.fold_left (fun acc (m, _) -> min acc m) max_int ranges
-
-(*
-   Seeds:
-       [55,67]
-       [79,92]
-
-   Seed-to-soil:
-       [50,97] -> [52,99]
-       [98,99] -> [50,51]
-
-       Therefore:
-           [55,67] -> [57,69]  // entirely in range, mapping from seed to soil = +2
-           [79,92] -> [81,94]  // ^
-
-   Soil-to-fertilizer:
-       [0,14] -> [39,53]
-       [15,51] -> [0,36]
-       [52,53] -> [37,38]
-
-       Therefore:
-           [57,69] -> [57,69]  // unmapped
-           [81,94] -> [81,94]  // unmapped
-
-   Fertilizer-to-water:
-       [0,6] -> [42,48]
-       [7,10] -> [57,60]
-       [11,52] -> [0,41]
-       [53,60] -> [49,56]
-
-       Therefore:
-           [57,69] -> [53,56],[61,69]
-           [81,94] -> [81,94]
-
-   Water-to-light:
-       [18,24] -> [88,94]
-       [25,94] -> [18,87]
-
-       Therefore:
-           [53,56] -> [46,49]
-           [61,69] -> [54,62]
-           [81,94] -> [74,87]
-
-   Light-to-temperature:
-       [77,99] -> [45,67]
-       [45,63] -> [81,99]
-       [64,76] -> [68,80]
-
-       Therefore:
-           [46,49] -> [82,85]
-           [54,62] -> [90,98]
-           [74,87] -> [78,80],[45,55]
-
-   Temperature-to-humidity:
-       [69,70] -> [0,1]
-       [0,68] -> [1,69]
-
-       Therefore:
-           [45,55] -> [46,56]
-           [78,80] -> [78,80]
-           [82,85] -> [82,85]
-           [90,98] -> [90,98]
-
-   Humidity-to-location:
-       [56,92] -> [60,96]
-       [93,96] -> [56,69]
-
-       Therefore:
-           [46,56] -> [46,55],[60,60]
-           [78,80] -> [82,84]
-           [82,85] -> [86,89]
-           [90,98] -> [94,96],[56,59],[97,98]
-*)
