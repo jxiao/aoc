@@ -1,4 +1,8 @@
-let print_list f = List.iter (fun v -> f v |> print_endline)
+let print_list f l =
+  Printf.printf "[%!";
+  List.iter (fun v -> f v |> Printf.printf "%s, %!") l;
+  Printf.printf "]\n%!"
+
 let char_list_of_string s = s |> String.to_seq |> List.of_seq
 let sum = List.fold_left ( + ) 0
 
