@@ -1,3 +1,4 @@
+open Utils
 (*
    --- Day 7: Camel Cards ---
    Your all-expenses-paid trip turns out to be a one-way, five-minute ride in an airship. (At least it's a cool airship!) It drops you off at the edge of a vast desert and descends back to Island Island.
@@ -51,3 +52,102 @@
 
    Find the rank of every hand in your set. What are the total winnings?
 *)
+
+(* Note: follows natural ordering of definition in ascending order *)
+type hand_type =
+  | HT_High
+  | HT_One
+  | HT_Two
+  | HT_Three
+  | HT_Full
+  | HT_Four
+  | HT_Five
+
+type card =
+  | C_Two
+  | C_Three
+  | C_Four
+  | C_Five
+  | C_Six
+  | C_Seven
+  | C_Eight
+  | C_Nine
+  | C_Ten
+  | C_Jack
+  | C_Queen
+  | C_King
+  | C_Ace
+
+let char_to_card = function
+  | '2' -> C_Two
+  | '3' -> C_Three
+  | '4' -> C_Four
+  | '5' -> C_Five
+  | '6' -> C_Six
+  | '7' -> C_Seven
+  | '8' -> C_Eight
+  | '9' -> C_Nine
+  | 'T' -> C_Ten
+  | 'J' -> C_Jack
+  | 'Q' -> C_Queen
+  | 'K' -> C_King
+  | 'A' -> C_Ace
+  | _ -> Invalid_argument "Cannot map unknown char to card" |> raise
+
+module C = struct
+  type t = card
+
+  let compare = compare
+end
+
+module CMap = Map.Make (C)
+
+let hand_to_type hand =
+  let counts =
+    List.fold_left
+      (fun acc c ->
+        CMap.update c
+          (fun e -> match e with Some v -> Some (v + 1) | None -> Some 1)
+          acc)
+      CMap.empty hand
+  in
+  if CMap.exists (fun _ v -> v = 5) counts then HT_Five
+  else if CMap.exists (fun _ v -> v = 4) counts then HT_Four
+  else if
+    CMap.exists (fun _ v -> v = 3) counts
+    && CMap.exists (fun _ v -> v = 2) counts
+  then HT_Full
+  else if CMap.exists (fun _ v -> v = 3) counts then HT_Three
+  else if CMap.filter (fun _ v -> v = 2) counts |> CMap.cardinal = 2 then HT_Two
+  else if CMap.exists (fun _ v -> v = 1) counts then HT_One
+  else HT_High
+
+let parse line =
+  match String.split_on_char ' ' line with
+  | [ h; b ] ->
+      let hand = String.to_seq h |> List.of_seq |> List.map char_to_card in
+      if List.length hand <> 5 then
+        Invalid_argument "A hand must have exactly 5 cards" |> raise;
+      (hand_to_type hand, hand, int_of_string b)
+  | _ -> Invalid_argument "Unexpected format for hand" |> raise
+
+(* Sorts in ascending order *)
+let compare_hands (ht1, h1, _) (ht2, h2, _) =
+  let rec traverse h1 h2 =
+    match (h1, h2) with
+    | [], [] -> 0
+    | c1 :: t1, c2 :: t2 ->
+        let curr = compare c1 c2 in
+        if curr <> 0 then curr else traverse t1 t2
+    | _ -> Invalid_argument "Hands must have the same length" |> raise
+  in
+  let type_comp = compare ht1 ht2 in
+  if type_comp <> 0 then type_comp else traverse h1 h2
+
+let score_hands = List.mapi (fun i (_, _, b) -> (i + 1) * b)
+
+let part_one file =
+  let lines = file_lines file in
+  let hands = List.map parse lines in
+  let sorted = List.sort compare_hands hands in
+  score_hands sorted |> sum
