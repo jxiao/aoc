@@ -64,6 +64,7 @@ type hand_type =
   | HT_Five
 
 type card =
+  | C_Joker
   | C_Two
   | C_Three
   | C_Four
@@ -78,7 +79,7 @@ type card =
   | C_King
   | C_Ace
 
-let char_to_card = function
+let char_to_card joker = function
   | '2' -> C_Two
   | '3' -> C_Three
   | '4' -> C_Four
@@ -88,7 +89,7 @@ let char_to_card = function
   | '8' -> C_Eight
   | '9' -> C_Nine
   | 'T' -> C_Ten
-  | 'J' -> C_Jack
+  | 'J' -> if joker then C_Joker else C_Jack
   | 'Q' -> C_Queen
   | 'K' -> C_King
   | 'A' -> C_Ace
@@ -102,15 +103,14 @@ end
 
 module CMap = Map.Make (C)
 
+let get_counts hand =
+  List.fold_left
+    (fun acc c ->
+      CMap.update c (function Some v -> Some (v + 1) | None -> Some 1) acc)
+    CMap.empty hand
+
 let hand_to_type hand =
-  let counts =
-    List.fold_left
-      (fun acc c ->
-        CMap.update c
-          (fun e -> match e with Some v -> Some (v + 1) | None -> Some 1)
-          acc)
-      CMap.empty hand
-  in
+  let counts = get_counts hand in
   if CMap.exists (fun _ v -> v = 5) counts then HT_Five
   else if CMap.exists (fun _ v -> v = 4) counts then HT_Four
   else if
@@ -119,16 +119,18 @@ let hand_to_type hand =
   then HT_Full
   else if CMap.exists (fun _ v -> v = 3) counts then HT_Three
   else if CMap.filter (fun _ v -> v = 2) counts |> CMap.cardinal = 2 then HT_Two
-  else if CMap.exists (fun _ v -> v = 1) counts then HT_One
+  else if CMap.exists (fun _ v -> v = 2) counts then HT_One
   else HT_High
 
-let parse line =
+let parse f joker line =
   match String.split_on_char ' ' line with
   | [ h; b ] ->
-      let hand = String.to_seq h |> List.of_seq |> List.map char_to_card in
+      let hand =
+        String.to_seq h |> List.of_seq |> List.map (char_to_card joker)
+      in
       if List.length hand <> 5 then
         Invalid_argument "A hand must have exactly 5 cards" |> raise;
-      (hand_to_type hand, hand, int_of_string b)
+      (f hand, hand, int_of_string b)
   | _ -> Invalid_argument "Unexpected format for hand" |> raise
 
 (* Sorts in ascending order *)
@@ -148,6 +150,51 @@ let score_hands = List.mapi (fun i (_, _, b) -> (i + 1) * b)
 
 let part_one file =
   let lines = file_lines file in
-  let hands = List.map parse lines in
+  let hands = List.map (parse hand_to_type false) lines in
+  let sorted = List.sort compare_hands hands in
+  score_hands sorted |> sum
+
+(*
+   --- Part Two ---
+   To make things a little more interesting, the Elf introduces one additional rule. Now, J cards are jokers - wildcards that can act like whatever card would make the hand the strongest type possible.
+
+   To balance this, J cards are now the weakest individual cards, weaker even than 2. The other cards stay in the same order: A, K, Q, T, 9, 8, 7, 6, 5, 4, 3, 2, J.
+
+   J cards can pretend to be whatever card is best for the purpose of determining hand type; for example, QJJQ2 is now considered four of a kind. However, for the purpose of breaking ties between two hands of the same type, J is always treated as J, not the card it's pretending to be: JKKK2 is weaker than QQQQ2 because J is weaker than Q.
+
+   Now, the above example goes very differently:
+
+   32T3K 765
+   T55J5 684
+   KK677 28
+   KTJJT 220
+   QQQJA 483
+   32T3K is still the only one pair; it doesn't contain any jokers, so its strength doesn't increase.
+   KK677 is now the only two pair, making it the second-weakest hand.
+   T55J5, KTJJT, and QQQJA are now all four of a kind! T55J5 gets rank 3, QQQJA gets rank 4, and KTJJT gets rank 5.
+   With the new joker rule, the total winnings in this example are 5905.
+
+   Using the new joker rule, find the rank of every hand in your set. What are the new total winnings?
+*)
+
+let hand_to_type_with_jokers hand =
+  let counts = get_counts hand in
+  let num_jokers =
+    match CMap.find_opt C_Joker counts with Some v -> v | None -> 0
+  in
+  let no_jokers = CMap.filter (fun c _ -> c <> C_Joker) counts in
+  if CMap.exists (fun _ v -> v + num_jokers = 5) no_jokers then HT_Five
+  else if CMap.exists (fun _ v -> v + num_jokers = 4) no_jokers then HT_Four
+  else if num_jokers = 2 then HT_Three
+  else if num_jokers = 1 then
+    if CMap.filter (fun _ v -> v = 2) no_jokers |> CMap.cardinal = 2 then
+      HT_Full
+    else if CMap.exists (fun _ v -> v = 2) no_jokers then HT_Three
+    else HT_One
+  else hand_to_type hand
+
+let part_two file =
+  let lines = file_lines file in
+  let hands = List.map (parse hand_to_type_with_jokers true) lines in
   let sorted = List.sort compare_hands hands in
   score_hands sorted |> sum
