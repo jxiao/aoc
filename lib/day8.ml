@@ -59,16 +59,107 @@ let mapping lines =
   in
   SMap.of_list mapping_list
 
-let count_steps src dest map =
-  let rec count curr steps seq =
-    if curr = dest then steps
+(*
+   Original Solution (pre-refactor):
+
+   let count_steps src dest map =
+    let rec count curr steps seq =
+      if curr = dest then steps
+      else
+        let f, seq' = uncons_inf seq in
+        count (SMap.find curr map |> f) (steps + 1) seq'
+    in
+    count src 0
+
+   let part_one file =
+     let lines = file_lines file in
+     match lines with
+     | h :: t ->
+         let moves_seq =
+           char_list_of_string h
+           |> List.map (fun c ->
+                 match c with
+                 | 'L' -> fst
+                 | 'R' -> snd
+                 | _ ->
+                     Invalid_argument "Unexpected char in directions string"
+                     |> raise)
+           |> inf_moves
+         in
+         count_steps "AAA" "ZZZ" (mapping t) moves_seq
+     | _ -> Invalid_argument "Unexpected file format" |> raise
+*)
+
+(*
+   --- Part Two ---
+   The sandstorm is upon you and you aren't any closer to escaping the wasteland. You had the camel follow the instructions, but you've barely left your starting position. It's going to take significantly more steps to escape!
+
+   What if the map isn't for people - what if the map is for ghosts? Are ghosts even bound by the laws of spacetime? Only one way to find out.
+
+   After examining the maps a bit longer, your attention is drawn to a curious fact: the number of nodes with names ending in A is equal to the number ending in Z! If you were a ghost, you'd probably just start at every node that ends with A and follow all of the paths at the same time until they all simultaneously end up at nodes that end with Z.
+
+   For example:
+
+   LR
+
+   11A = (11B, XXX)
+   11B = (XXX, 11Z)
+   11Z = (11B, XXX)
+   22A = (22B, XXX)
+   22B = (22C, 22C)
+   22C = (22Z, 22Z)
+   22Z = (22B, 22B)
+   XXX = (XXX, XXX)
+   Here, there are two starting nodes, 11A and 22A (because they both end with A). As you follow each left/right instruction, use that instruction to simultaneously navigate away from both nodes you're currently on. Repeat this process until all of the nodes you're currently on end with Z. (If only some of the nodes you're on end with Z, they act like any other node and you continue as normal.) In this example, you would proceed as follows:
+
+   Step 0: You are at 11A and 22A.
+   Step 1: You choose all of the left paths, leading you to 11B and 22B.
+   Step 2: You choose all of the right paths, leading you to 11Z and 22C.
+   Step 3: You choose all of the left paths, leading you to 11B and 22Z.
+   Step 4: You choose all of the right paths, leading you to 11Z and 22B.
+   Step 5: You choose all of the left paths, leading you to 11B and 22C.
+   Step 6: You choose all of the right paths, leading you to 11Z and 22Z.
+   So, in this example, you end up entirely on nodes that end in Z after 6 steps.
+
+   Simultaneously start on every node that ends with A. How many steps does it take before you're only on nodes that end with Z?
+*)
+
+module SSet = Set.Make (String)
+
+let sources map =
+  SMap.bindings map
+  |> List.filter_map (fun (x, _) ->
+         if String.ends_with ~suffix:"A" x then Some x else None)
+
+let is_Z = String.ends_with ~suffix:"Z"
+let is_finished = List.for_all is_Z
+let rec gcd a b = if b = 0 then a else gcd b (a mod b)
+let lcm a b = a * b / gcd a b
+let lcm_multiple completed = SMap.fold (fun _ v acc -> lcm v acc) completed 1
+
+let count_steps_multiple srcs map =
+  let pairs = List.map (fun s -> (s, s)) srcs in
+  let rec run_round currs completed steps seq =
+    if SMap.cardinal completed = List.length srcs then lcm_multiple completed
     else
       let f, seq' = uncons_inf seq in
-      count (SMap.find curr map |> f) (steps + 1) seq'
+      let now_completed, moving_on =
+        List.partition (fun (_, s) -> is_Z s) currs
+      in
+      let next =
+        List.map (fun (src, s) -> (src, SMap.find s map |> f)) moving_on
+      in
+      let completed' =
+        List.fold_left
+          (fun acc (src, _) -> SMap.add src steps acc)
+          completed now_completed
+      in
+      run_round next completed' (steps + 1) seq'
   in
-  count src 0
+  run_round pairs SMap.empty 0
 
-let part_one file =
+(* Requires: no overlapping cycles. *)
+let solution file =
   let lines = file_lines file in
   match lines with
   | h :: t ->
@@ -83,5 +174,13 @@ let part_one file =
                    |> raise)
         |> inf_moves
       in
-      count_steps "AAA" "ZZZ" (mapping t) moves_seq
+      (mapping t, moves_seq)
   | _ -> Invalid_argument "Unexpected file format" |> raise
+
+let part_one file =
+  let map, seq = solution file in
+  count_steps_multiple [ "AAA" ] map seq
+
+let part_two file =
+  let map, seq = solution file in
+  count_steps_multiple (sources map) map seq
