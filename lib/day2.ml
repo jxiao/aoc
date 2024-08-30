@@ -65,7 +65,7 @@ let parse_line s =
   let maxes = parse_handfuls SMap.empty hands in
   (id, maxes)
 
-let part_one_result file =
+let part_one file =
   let lines = file_lines file in
   let games = List.map parse_line lines in
   let score =
@@ -106,7 +106,7 @@ let part_one_result file =
    For each game, find the minimum set of cubes that must have been present. What is the sum of the power of these sets?
 *)
 
-let part_two_result file =
+let part_two file =
   let lines = file_lines file in
   let games = List.map parse_line lines in
   let find_default k maxes =

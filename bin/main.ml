@@ -1,42 +1,51 @@
-let print_result day part ans =
-  Printf.printf "Day %i, Part %i = %i\n%!" day part ans
+let int_opt_to_string opt =
+  match opt with Some v -> string_of_int v | None -> "N/A"
 
-let day1 = "files/day1.txt";;
+let print_header d p =
+  Printf.printf
+    "Running `main.ml` with the following optional args:\n\
+     \tDay:\t%s\n\
+     \tPart:\t%s\n\n\
+     %!"
+    (int_opt_to_string d) (int_opt_to_string p)
 
-Aoc.Day1.part_one_result day1 |> print_result 1 1;;
-Aoc.Day1.part_two_result day1 |> print_result 1 2
+(* Note: first arg is always the executable file path. Ignored. *)
+let day, part =
+  match Sys.argv |> Array.to_list with
+  | _ :: d :: p :: _ -> (int_of_string_opt d, int_of_string_opt p)
+  | [ _; d ] -> (int_of_string_opt d, None)
+  | _ -> (None, None)
+;;
 
-let day2 = "files/day2.txt";;
+print_header day part
 
-Aoc.Day2.part_one_result day2 |> print_result 2 1;;
-Aoc.Day2.part_two_result day2 |> print_result 2 2
+let print_result d p ans = Printf.printf "Day %i, Part %i = %i\n%!" d p ans
+let filepath = Printf.sprintf "files/day%d.txt"
 
-let day3 = "files/day3.txt";;
+let modules =
+  [
+    (1, [ Aoc.Day1.part_one; Aoc.Day1.part_two ]);
+    (2, [ Aoc.Day2.part_one; Aoc.Day2.part_two ]);
+    (3, [ Aoc.Day3.part_one; Aoc.Day3.part_two ]);
+    (4, [ Aoc.Day4.part_one; Aoc.Day4.part_two ]);
+    (5, [ Aoc.Day5.part_one; Aoc.Day5.part_two ]);
+    (6, [ Aoc.Day6.part_one; Aoc.Day6.part_two ]);
+    (7, [ Aoc.Day7.part_one; Aoc.Day7.part_two ]);
+    (8, [ Aoc.Day8.part_one; Aoc.Day8.part_two ]);
+  ]
 
-Aoc.Day3.part_one day3 |> print_result 3 1;;
-Aoc.Day3.part_two day3 |> print_result 3 2
+let exec_day d parts =
+  let path = filepath d in
+  match part with
+  | Some part ->
+      if List.length parts >= part then
+        List.nth parts (part - 1) path |> print_result d part
+  | None -> List.iteri (fun i f -> f path |> print_result d (i + 1)) parts
+;;
 
-let day4 = "files/day4.txt";;
-
-Aoc.Day4.part_one day4 |> print_result 4 1;;
-Aoc.Day4.part_two day4 |> print_result 4 2
-
-let day5 = "files/day5.txt";;
-
-Aoc.Day5.part_one day5 |> print_result 5 1;;
-Aoc.Day5.part_two day5 |> print_result 5 2
-
-let day6 = "files/day6.txt";;
-
-Aoc.Day6.part_one day6 |> print_result 6 1;;
-Aoc.Day6.part_two day6 |> print_result 6 2
-
-let day7 = "files/day7.txt";;
-
-Aoc.Day7.part_one day7 |> print_result 7 1;;
-Aoc.Day7.part_two day7 |> print_result 7 2
-
-let day8 = "files/day8.txt";;
-
-Aoc.Day8.part_one day8 |> print_result 8 1;
-Aoc.Day8.part_two day8 |> print_result 8 2
+List.iter
+  (fun (d, fs) ->
+    match day with
+    | Some day -> if day = d then exec_day d fs
+    | None -> exec_day d fs)
+  modules

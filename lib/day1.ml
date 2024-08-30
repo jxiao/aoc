@@ -94,8 +94,7 @@ let digit_mappings =
   |> CLMap.add [ '6' ] 6 |> CLMap.add [ '7' ] 7 |> CLMap.add [ '8' ] 8
   |> CLMap.add [ '9' ] 9
 
-let part_one_result ?(debug = false) file =
-  get_part_result ~debug digit_mappings file
+let part_one file = get_part_result digit_mappings file
 
 (*
    --- Part Two ---
@@ -127,5 +126,4 @@ let digit_word_mappings =
   |> CLMap.add (char_list_of_string "eight") 8
   |> CLMap.add (char_list_of_string "nine") 9
 
-let part_two_result ?(debug = false) file =
-  get_part_result ~debug digit_word_mappings file
+let part_two file = get_part_result digit_word_mappings file
