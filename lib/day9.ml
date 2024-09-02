@@ -1,3 +1,4 @@
+open Utils
 (*
    --- Day 9: Mirage Maintenance ---
    You ride the camel through the sandstorm and stop where the ghost's maps told you to stop. The sandstorm subsequently subsides, somehow seeing you standing at an oasis!
@@ -64,3 +65,31 @@
 
    Analyze your OASIS report and extrapolate the next value for each history. What is the sum of these extrapolated values?
 *)
+
+let extract_seq_rev line =
+  String.split_on_char ' ' line |> List.filter_map int_of_string_opt |> List.rev
+
+let zeros = List.for_all (fun v -> v = 0)
+
+let next_rseq rseq =
+  let rec next_rseq_rec acc = function
+    | a :: (b :: _ as t) -> next_rseq_rec ((a - b) :: acc) t
+    | _ -> acc |> List.rev
+  in
+  next_rseq_rec [] rseq
+
+let predict seq =
+  let rec predict_rec seq =
+    if zeros seq then 0
+    else
+      match seq with
+      | [] ->
+          Invalid_argument "Found empty list of values for sequence" |> raise
+      | h :: _ -> h + (next_rseq seq |> predict_rec)
+  in
+  predict_rec seq
+
+let part_one file =
+  let lines = file_lines file in
+  let predictions = List.map (fun s -> extract_seq_rev s |> predict) lines in
+  sum predictions
