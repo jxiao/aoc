@@ -79,15 +79,15 @@ let next_rseq rseq =
   next_rseq_rec [] rseq
 
 let predict seq =
-  let rec predict_rec seq =
-    if zeros seq then 0
+  let rec predict_rec acc seq =
+    if zeros seq then acc
     else
       match seq with
       | [] ->
           Invalid_argument "Found empty list of values for sequence" |> raise
-      | h :: _ -> h + (next_rseq seq |> predict_rec)
+      | h :: _ -> next_rseq seq |> predict_rec (h + acc)
   in
-  predict_rec seq
+  predict_rec 0 seq
 
 let part_one file =
   let lines = file_lines file in

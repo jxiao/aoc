@@ -1,3 +1,5 @@
+open Utils
+
 (*
    --- Day 10: Pipe Maze ---
    You use the hang glider to ride the hot air from Desert Island all the way up to the floating metal island. This island is surprisingly cold and there definitely aren't any thermals to glide on, so you leave your hang glider behind.
@@ -93,3 +95,135 @@
    23...
    Find the single giant loop starting at S. How many steps along the loop does it take to get from the starting position to the point farthest from the starting position?
 *)
+type dir = N | S | W | E
+
+let dir_to_diff = function
+  | N -> (-1, 0)
+  | S -> (1, 0)
+  | W -> (0, -1)
+  | E -> (0, 1)
+
+let opp_dir = function N -> S | S -> N | W -> E | E -> W
+
+type pipe = NS | WE | NE | NW | SW | SE
+type tile = Ground | Pipe of dir * dir | Start of (dir * dir) option
+
+module Pos = struct
+  type t = int * int
+
+  let compare = compare
+end
+
+module TSet = Set.Make (Pos)
+
+let tiles = [ (N, S); (W, E); (N, E); (N, W); (S, W); (S, E) ]
+
+let char_to_tile = function
+  | '|' -> Pipe (N, S)
+  | '-' -> Pipe (W, E)
+  | 'L' -> Pipe (N, E)
+  | 'J' -> Pipe (N, W)
+  | '7' -> Pipe (S, W)
+  | 'F' -> Pipe (S, E)
+  | '.' -> Ground
+  | 'S' -> Start None
+  | c ->
+      Invalid_argument (Printf.sprintf "Invalid char \"%c\" found." c) |> raise
+
+(* Computes mapping from position to pipe along with the starting position *)
+let pipes lines =
+  let rec parse mapping start r = function
+    | [] -> (mapping, start)
+    | h :: t ->
+        let start', _ =
+          char_list_of_string h
+          |> List.fold_left
+               (fun (st, i) c ->
+                 match char_to_tile c with
+                 | Ground -> (st, i + 1)
+                 | Start _ -> (Some (r, i), i + 1)
+                 | tile ->
+                     Hashtbl.add mapping (r, i) tile;
+                     (st, i + 1))
+               (start, 0)
+        in
+        parse mapping start' (r + 1) t
+  in
+  parse (Hashtbl.create (List.length lines * List.length lines)) None 0 lines
+
+let dirs = [ N; S; W; E ]
+
+let can_enter_pipe_from pipe dir =
+  let l, r = pipe in
+  dir = l || dir = r
+
+let has_cycle pipes start orientation =
+  let rec dfs seen s =
+    match s with
+    | [] -> false
+    | (((r, c) as pos), None) :: t ->
+        let seen' = TSet.add pos seen in
+        let lft, rht = orientation in
+        let s' =
+          List.filter_map
+            (fun d ->
+              if d = lft || d = rht then
+                let dr, dc = dir_to_diff d in
+                let pos' = (r + dr, c + dc) in
+                let opp = opp_dir d in
+                match Hashtbl.find_opt pipes pos' with
+                | Some (Pipe (e1, e2)) ->
+                    if can_enter_pipe_from (e1, e2) opp then
+                      Some (pos', Some opp)
+                    else None
+                (* Following case shouldn't match onto Start *)
+                | _ -> None
+              else None)
+            dirs
+          @ t
+        in
+        dfs seen' s'
+    | (((r, c) as pos), Some pre_dir) :: t -> (
+        if TSet.mem pos seen then true
+        else
+          let seen' = TSet.add (r, c) seen in
+          match Hashtbl.find_opt pipes (r, c) with
+          | Some (Start _) -> true
+          | Some (Pipe (e1, e2)) ->
+              let s' =
+                List.filter_map
+                  (fun d ->
+                    if (d = e1 || d = e2) && d <> pre_dir then
+                      let dr, dc = dir_to_diff d in
+                      let pos' = (r + dr, c + dc) in
+                      let opp = opp_dir d in
+                      match Hashtbl.find_opt pipes pos' with
+                      | Some (Pipe (e1', e2')) ->
+                          if can_enter_pipe_from (e1', e2') opp then
+                            Some (pos', Some opp)
+                          else None
+                      | Some (Start _) ->
+                          if can_enter_pipe_from orientation opp then
+                            Some (pos', Some opp)
+                          else None
+                      | _ -> None
+                    else None)
+                  dirs
+                @ t
+              in
+              dfs seen' s'
+          | None -> dfs seen' t
+          | Some Ground -> dfs seen' t)
+  in
+  dfs TSet.empty [ (start, None) ]
+
+let part_one file =
+  let lines = file_lines file in
+  match pipes lines with
+  | _, None -> Invalid_argument "No start found." |> raise
+  | ps, Some start -> if List.exists (has_cycle ps start) tiles then 1 else 0
+
+(* build graph as adj list *)
+(* determine shape of pipe for Start *)
+(* find cycle *)
+(* run BFS to find shortest distances, taking the max *)
