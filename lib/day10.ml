@@ -106,7 +106,16 @@ let dir_to_diff = function
 let opp_dir = function N -> S | S -> N | W -> E | E -> W
 
 type pipe = NS | WE | NE | NW | SW | SE
-type tile = Ground | Pipe of dir * dir | Start of (dir * dir) option
+
+let pipe_to_dirs = function
+  | NS -> (N, S)
+  | WE -> (W, E)
+  | NE -> (N, E)
+  | NW -> (N, W)
+  | SW -> (S, W)
+  | SE -> (S, E)
+
+type tile = Ground | Pipe of pipe | Start of pipe option
 
 module Pos = struct
   type t = int * int
@@ -116,15 +125,15 @@ end
 
 module TSet = Set.Make (Pos)
 
-let tiles = [ (N, S); (W, E); (N, E); (N, W); (S, W); (S, E) ]
+let tiles = [ NS; WE; NE; NW; SW; SE ]
 
 let char_to_tile = function
-  | '|' -> Pipe (N, S)
-  | '-' -> Pipe (W, E)
-  | 'L' -> Pipe (N, E)
-  | 'J' -> Pipe (N, W)
-  | '7' -> Pipe (S, W)
-  | 'F' -> Pipe (S, E)
+  | '|' -> Pipe NS
+  | '-' -> Pipe WE
+  | 'L' -> Pipe NE
+  | 'J' -> Pipe NW
+  | '7' -> Pipe SW
+  | 'F' -> Pipe SE
   | '.' -> Ground
   | 'S' -> Start None
   | c ->
@@ -141,7 +150,9 @@ let pipes lines =
                (fun (st, i) c ->
                  match char_to_tile c with
                  | Ground -> (st, i + 1)
-                 | Start _ -> (Some (r, i), i + 1)
+                 | Start _ as tile ->
+                     Hashtbl.add mapping (r, i) tile;
+                     (Some (r, i), i + 1)
                  | tile ->
                      Hashtbl.add mapping (r, i) tile;
                      (st, i + 1))
@@ -153,17 +164,16 @@ let pipes lines =
 
 let dirs = [ N; S; W; E ]
 
-let can_enter_pipe_from pipe dir =
-  let l, r = pipe in
+let can_enter_pipe_from (pipe : pipe) dir =
+  let l, r = pipe_to_dirs pipe in
   dir = l || dir = r
 
-let has_cycle pipes start orientation =
-  let rec dfs seen s =
+let furthest_cycle pipes start =
+  let rec dfs s orientation =
     match s with
-    | [] -> false
-    | (((r, c) as pos), None) :: t ->
-        let seen' = TSet.add pos seen in
-        let lft, rht = orientation in
+    | [] -> None
+    | ((r, c), steps, None) :: t ->
+        let lft, rht = pipe_to_dirs orientation in
         let s' =
           List.filter_map
             (fun d ->
@@ -172,9 +182,9 @@ let has_cycle pipes start orientation =
                 let pos' = (r + dr, c + dc) in
                 let opp = opp_dir d in
                 match Hashtbl.find_opt pipes pos' with
-                | Some (Pipe (e1, e2)) ->
-                    if can_enter_pipe_from (e1, e2) opp then
-                      Some (pos', Some opp)
+                | Some (Pipe p) ->
+                    if can_enter_pipe_from p opp then
+                      Some (pos', steps + 1, Some opp)
                     else None
                 (* Following case shouldn't match onto Start *)
                 | _ -> None
@@ -182,48 +192,41 @@ let has_cycle pipes start orientation =
             dirs
           @ t
         in
-        dfs seen' s'
-    | (((r, c) as pos), Some pre_dir) :: t -> (
-        if TSet.mem pos seen then true
-        else
-          let seen' = TSet.add (r, c) seen in
-          match Hashtbl.find_opt pipes (r, c) with
-          | Some (Start _) -> true
-          | Some (Pipe (e1, e2)) ->
-              let s' =
-                List.filter_map
-                  (fun d ->
-                    if (d = e1 || d = e2) && d <> pre_dir then
-                      let dr, dc = dir_to_diff d in
-                      let pos' = (r + dr, c + dc) in
-                      let opp = opp_dir d in
-                      match Hashtbl.find_opt pipes pos' with
-                      | Some (Pipe (e1', e2')) ->
-                          if can_enter_pipe_from (e1', e2') opp then
-                            Some (pos', Some opp)
-                          else None
-                      | Some (Start _) ->
-                          if can_enter_pipe_from orientation opp then
-                            Some (pos', Some opp)
-                          else None
-                      | _ -> None
-                    else None)
-                  dirs
-                @ t
-              in
-              dfs seen' s'
-          | None -> dfs seen' t
-          | Some Ground -> dfs seen' t)
+        dfs s' orientation
+    | (((r, c) as pos), steps, Some pre_dir) :: t -> (
+        match Hashtbl.find_opt pipes pos with
+        | Some (Start _) -> Some (steps / 2)
+        | Some (Pipe p) ->
+            let e1, e2 = pipe_to_dirs p in
+            let s' =
+              List.filter_map
+                (fun d ->
+                  if (d = e1 || d = e2) && d <> pre_dir then
+                    let dr, dc = dir_to_diff d in
+                    let pos' = (r + dr, c + dc) in
+                    let opp = opp_dir d in
+                    match Hashtbl.find_opt pipes pos' with
+                    | Some (Pipe p') ->
+                        if can_enter_pipe_from p' opp then
+                          Some (pos', steps + 1, Some opp)
+                        else None
+                    | Some (Start _) ->
+                        if can_enter_pipe_from orientation opp then
+                          Some (pos', steps + 1, Some opp)
+                        else None
+                    | _ -> None
+                  else None)
+                dirs
+              @ t
+            in
+            dfs s' orientation
+        | _ -> dfs t orientation)
   in
-  dfs TSet.empty [ (start, None) ]
+  List.filter_map (dfs [ (start, 0, None) ]) tiles
+  |> List.fold_left max Int.min_int
 
 let part_one file =
   let lines = file_lines file in
   match pipes lines with
   | _, None -> Invalid_argument "No start found." |> raise
-  | ps, Some start -> if List.exists (has_cycle ps start) tiles then 1 else 0
-
-(* build graph as adj list *)
-(* determine shape of pipe for Start *)
-(* find cycle *)
-(* run BFS to find shortest distances, taking the max *)
+  | ps, Some start -> furthest_cycle ps start
