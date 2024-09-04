@@ -93,3 +93,10 @@ let part_one file =
   let lines = file_lines file in
   let predictions = List.map (fun s -> extract_seq_rev s |> predict) lines in
   sum predictions
+
+let part_two file =
+  let lines = file_lines file in
+  let predictions =
+    List.map (fun s -> extract_seq_rev s |> List.rev |> predict) lines
+  in
+  sum predictions
