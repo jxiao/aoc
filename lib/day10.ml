@@ -209,3 +209,44 @@ let part_one file =
   match pipes lines with
   | _, None -> Invalid_argument "No start found." |> raise
   | ps, Some start -> furthest_cycle ps start
+
+  let gen_neighbors_2 pipes (r, c) (e1, e2) steps last =
+    List.filter_map
+      (fun d ->
+        if (d = e1 || d = e2) && Some d <> last then
+          let dr, dc = dir_to_diff d in
+          let pos' = (r + dr, c + dc) in
+          let opp = opp_dir d in
+          match Hashtbl.find_opt pipes pos' with
+          | (Some (Pipe p') | Some (Start (Some p')))
+            when can_enter_pipe_from p' opp ->
+              Some (pos', steps + 1, Some opp)
+          | _ -> None
+        else None)
+      dirs
+
+let shoelace pipes start = 
+  let rec dfs s orientation =
+    match s with
+    | [] -> None
+    | (pos, acc, last) :: t -> (
+        match Hashtbl.find_opt pipes pos with
+        | Some (Start (Some _)) when last <> None -> Some acc
+        | Some (Pipe p) | Some (Start (Some p)) ->
+            let s' = gen_neighbors_2 pipes pos (pipe_to_dirs p) acc last @ t in
+            dfs s' orientation
+        | _ -> dfs t orientation)
+  in
+  List.filter_map
+    (fun tile ->
+      Hashtbl.add pipes start (Start (Some tile));
+      let res = dfs [ (start, 0, None) ] tile in
+      Hashtbl.remove pipes start;
+      res)
+    tiles
+  |> List.fold_left max Int.min_int
+
+let part_two file =
+  let lines = file_lines file in
+  | _, None -> Invalid_argument "No start found." |> raise
+  | ps, Some start -> shoelace ps start
