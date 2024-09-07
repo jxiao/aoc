@@ -210,37 +210,69 @@ let part_one file =
   | _, None -> Invalid_argument "No start found." |> raise
   | ps, Some start -> furthest_cycle ps start
 
-  let gen_neighbors_2 pipes (r, c) (e1, e2) steps last =
-    List.filter_map
-      (fun d ->
-        if (d = e1 || d = e2) && Some d <> last then
-          let dr, dc = dir_to_diff d in
-          let pos' = (r + dr, c + dc) in
-          let opp = opp_dir d in
-          match Hashtbl.find_opt pipes pos' with
-          | (Some (Pipe p') | Some (Start (Some p')))
-            when can_enter_pipe_from p' opp ->
-              Some (pos', steps + 1, Some opp)
-          | _ -> None
-        else None)
-      dirs
+let is_corner p = p <> NS && p <> WE
 
-let shoelace pipes start = 
-  let rec dfs s orientation =
+let gen_neighbors_2 pipes p (r, c) (e1, e2) acc b back prev =
+  List.filter_map
+    (fun d ->
+      if (d = e1 || d = e2) && Some d <> back then
+        let dr, dc = dir_to_diff d in
+        let ((r', c') as pos') = (r + dr, c + dc) in
+        let opp = opp_dir d in
+        match Hashtbl.find_opt pipes pos' with
+        | (Some (Pipe p') | Some (Start (Some p')))
+          when can_enter_pipe_from p' opp -> (
+            match prev with
+            | None ->
+                Some
+                  ( pos',
+                    acc,
+                    Some opp,
+                    (if is_corner p then Some (r, c) else prev),
+                    b + 1 )
+            | Some (pr, pc) ->
+                let det, prev', b' =
+                  if is_corner p' then (
+                    let t = (pc * r') - (pr * c') in
+                    Printf.printf
+                      "Det of coordinates (%d,%d) and (%d,%d) = \
+                       %d,acc=%d,sum=%d,b'=%d\n\
+                       %!"
+                      pr pc r' c' t acc (acc + t) (b + 1);
+                    (t, Some pos', b + 1))
+                  else (0, prev, b + 1)
+                in
+                Some (pos', acc + det, Some opp, prev', b'))
+        | _ -> None
+      else None)
+    dirs
+
+let shoelace pipes start =
+  let rec dfs s start_orientation =
     match s with
     | [] -> None
-    | (pos, acc, last) :: t -> (
+    | (pos, acc, back, prev_corner, b) :: t -> (
         match Hashtbl.find_opt pipes pos with
-        | Some (Start (Some _)) when last <> None -> Some acc
+        | Some (Start (Some _)) when back <> None ->
+            Some (abs (acc / 2) + 1 - (b / 2))
         | Some (Pipe p) | Some (Start (Some p)) ->
-            let s' = gen_neighbors_2 pipes pos (pipe_to_dirs p) acc last @ t in
-            dfs s' orientation
-        | _ -> dfs t orientation)
+            let s' =
+              gen_neighbors_2 pipes p pos (pipe_to_dirs p) acc b back
+                prev_corner
+              @ t
+            in
+            dfs s' start_orientation
+        | _ -> dfs t start_orientation)
   in
   List.filter_map
     (fun tile ->
       Hashtbl.add pipes start (Start (Some tile));
-      let res = dfs [ (start, 0, None) ] tile in
+      print_endline (if is_corner tile then "CORNER" else "NOT CORNER");
+      let res =
+        dfs
+          [ (start, 0, None, (if is_corner tile then Some start else None), 0) ]
+          tile
+      in
       Hashtbl.remove pipes start;
       res)
     tiles
@@ -248,5 +280,6 @@ let shoelace pipes start =
 
 let part_two file =
   let lines = file_lines file in
+  match pipes lines with
   | _, None -> Invalid_argument "No start found." |> raise
   | ps, Some start -> shoelace ps start

@@ -33,7 +33,7 @@ let modules =
     (7, [ Aoc.Day7.part_one; Aoc.Day7.part_two ]);
     (8, [ Aoc.Day8.part_one; Aoc.Day8.part_two ]);
     (9, [ Aoc.Day9.part_one; Aoc.Day9.part_two ]);
-    (10, [ Aoc.Day10.part_one ]);
+    (10, [ Aoc.Day10.part_one; Aoc.Day10.part_two ]);
   ]
 
 let exec_day d parts =
