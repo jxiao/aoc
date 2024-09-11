@@ -85,11 +85,6 @@ let cond_to_char = function
   | Damaged -> '#'
   | Unknown -> '?'
 
-(* IDEA:
-   - attempt to put in position, check if valid
-     - sum up
-*)
-
 let rec can_be_cond cond n l =
   if n = 0 then true
   else
@@ -115,54 +110,69 @@ let damaged_seq l n =
     in
     match opt with None -> None | Some l' -> Some (List.rev l')
 
-let rec calc springs groups =
-  (* Printf.printf "Calling calc with springs=%s, groups=%s\n%!"
-     (List.map cond_to_char springs |> List.to_seq |> String.of_seq)
-     (List.fold_left (fun acc i -> acc ^ "," ^ string_of_int i) "" groups); *)
-  let res =
+module P = struct
+  type t = condition list * int list
+
+  let compare = compare
+end
+
+let save_and_return cache k v =
+  Hashtbl.add cache k v;
+  v
+
+let rec calc springs groups cache =
+  if Hashtbl.mem cache (springs, groups) then
+    Hashtbl.find cache (springs, groups)
+  else
     match (springs, groups) with
     | hs :: ts, hg :: tg -> (
         match hs with
-        | Operational -> calc ts groups
+        | Operational ->
+            calc ts groups cache |> save_and_return cache (springs, groups)
         | Damaged -> (
             match damaged_seq springs hg with
-            | None -> 0
-            | Some rest -> calc rest tg)
+            | None -> save_and_return cache (springs, groups) 0
+            | Some rest ->
+                calc rest tg cache |> save_and_return cache (springs, groups))
         | Unknown ->
             let curr_damaged =
               match damaged_seq springs hg with
               | None -> 0
-              | Some rest -> calc rest tg
+              | Some rest -> calc rest tg cache
             in
-            let curr_op = calc ts groups in
-            curr_damaged + curr_op)
+            let curr_op = calc ts groups cache in
+            save_and_return cache (springs, groups) (curr_damaged + curr_op))
     | [], _ -> if List.for_all (( = ) 0) groups then 1 else 0
     | _, [] -> if List.for_all (( <> ) Damaged) springs then 1 else 0
-  in
-  (* Printf.printf "Returning calc with springs=%s, groups=%s === ans=%d\n%!"
-     (List.map cond_to_char springs |> List.to_seq |> String.of_seq)
-     (List.fold_left (fun acc i -> acc ^ "," ^ string_of_int i) "" groups)
-     res; *)
-  res
 
-let parts line =
+let repeat n sep l =
+  List.init n (fun _ -> l)
+  |> List.fold_left (fun acc x -> acc @ (if acc = [] then [] else sep) @ x) []
+
+let parts repeats line =
   match String.split_on_char ' ' line with
   | [ pre; post ] ->
-      let springs = char_list_of_string pre |> List.map char_to_condition in
-      let groups = String.split_on_char ',' post |> List.map int_of_string in
+      let springs =
+        char_list_of_string pre |> List.map char_to_condition
+        |> repeat repeats [ Unknown ]
+      in
+      let groups =
+        String.split_on_char ',' post
+        |> List.map int_of_string |> repeat repeats []
+      in
       (springs, groups)
   | _ ->
       Invalid_argument "Could not find separator between springs and groups"
       |> raise
 
-let arrangements line =
-  let springs, groups = parts line in
-  calc springs groups
+let arrangements repeats line =
+  let springs, groups = parts repeats line in
+  Hashtbl.create (List.length springs * List.length groups)
+  |> calc springs groups
 
 let part_one file =
   let lines = file_lines file in
-  let res = List.map arrangements lines in
-  (* print_list (Printf.sprintf "%d\t") res; *)
+  let res = List.map (arrangements 1) lines in
   sum res
 
 (*
@@ -193,49 +203,7 @@ let part_one file =
    Unfold your condition records; what is the new sum of possible arrangement counts?
 *)
 
-(* 
-
-take original, add ? to front and back
-
-*)
-
-(* 
-
-? 1 ==> 1
-????????? 1,1,1,1,1
-  - #.#.#.#.#
-
-?? 1 ==> 2
-2 times
-????? 1,1
-  #.#..
-  #..#.
-  #...#
-  .#.#.
-  .#..#
-  ..#.#
-  ==> 6
-3 times
-???????? 1,1,1
-  #.#.#...
-  #.#..#..
-  #.#...#.
-  #.#....#
-  #..#.#..
-  #..#..#.
-  #..#...#
-  #...#.#.
-  #...#..#
-  #....#.#
-  .#.#.#..
-  .#.#..#.
-  .#.#...#
-  .#..#.#.
-  .#..#..#
-  .#...#.#
-  ..#.#.#.
-  ..#.#..#
-  ..#..#.#
-  ...#.#.#  
-
-*)
+let part_two file =
+  let lines = file_lines file in
+  let res = List.map (arrangements 5) lines in
+  sum res
