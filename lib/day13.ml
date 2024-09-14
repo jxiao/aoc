@@ -63,7 +63,7 @@ open Utils
 
 let patterns =
   let rec read puzzles acc = function
-    | [] -> acc :: puzzles
+    | [] -> List.rev acc :: puzzles
     | h :: t ->
         if String.length h = 0 then read (List.rev acc :: puzzles) [] t
         else read puzzles (char_list_of_string h :: acc) t
@@ -75,50 +75,113 @@ let transpose mat =
   List.iter
     (fun row ->
       List.iteri
-        (fun r v ->
-          match Hashtbl.find_opt mapping r with
-          | None -> Hashtbl.add mapping r [ v ]
-          | Some l -> Hashtbl.replace mapping r (l @ [ v ]))
+        (fun c v ->
+          match Hashtbl.find_opt mapping c with
+          | None -> Hashtbl.add mapping c [ v ]
+          | Some l -> Hashtbl.replace mapping c (l @ [ v ]))
         row)
     mat;
   Hashtbl.to_seq mapping |> List.of_seq |> List.sort compare |> List.map snd
 
-let above =
-  let rec scan i = function
-    | r1 :: r2 :: _ when r1 = r2 -> i
-    | _ :: t -> scan (i + 1) t
-    | _ -> Invalid_argument "Could not find mirror in puzzle" |> raise
+let check rows (last_id, last) n =
+  let potential_starts =
+    Hashtbl.to_seq rows
+    |> Seq.filter_map (fun (id, l) ->
+           if l = last && id <> last_id && (id = 1 || last_id = n) then Some id
+           else None)
+    |> List.of_seq
   in
-  scan 1
+  let rec acc lo hi =
+    lo >= hi
+    || (Hashtbl.find rows lo = Hashtbl.find rows hi && acc (lo + 1) (hi - 1))
+  in
+  match
+    List.find_opt
+      (fun first -> (last_id - first) mod 2 = 1 && acc first last_id)
+      potential_starts
+  with
+  | None -> None
+  | Some start ->
+      if last_id = n then Some ((last_id + start) / 2) else Some (last_id / 2)
+
+let above (mat : char list list) =
+  (* NOTE: rows are 1-indexed *)
+  let n = List.length mat in
+  let rows = Hashtbl.create (List.length mat) in
+  let rec scan i l =
+    match l with
+    | h :: t -> (
+        Hashtbl.add rows i h;
+        match check rows (i, h) n with None -> scan (i + 1) t | opt -> opt)
+    | _ -> None
+  in
+  scan 1 mat
+
+let score = function None -> 0 | Some v -> v
 
 let part_one file =
   let lines = file_lines file in
   let puzzles = patterns lines in
-  let up = List.map (fun p -> above p) puzzles in
-  let left = List.map (fun p -> transpose p |> above) puzzles in
-  print_list (fun i -> "Above: "^(string_of_int i)) up;
-  print_list (fun i -> "Left: "^(string_of_int i)) left;
-
+  (*
+     let up = List.map (fun p -> above p |> score) puzzles in
+     let left = List.map (fun p -> transpose p |> above |> score) puzzles in
+     print_list (fun i -> "Above: " ^ string_of_int i) up;
+     print_list (fun i -> "Left: " ^ string_of_int i) left; *)
   let scores =
-    List.map (fun p -> above p + (100 * (transpose p |> above))) puzzles
+    List.map
+      (fun p -> (100 * (above p |> score)) + (transpose p |> above |> score))
+      puzzles
   in
   sum scores
 
 (*
+   --- Part Two ---
+   You resume walking through the valley of mirrors and - SMACK! - run directly into one. Hopefully nobody was watching, because that must have been pretty embarrassing.
 
-   1 2 3
-   4 5 6
-   7 8 9
+   Upon closer inspection, you discover that every mirror has exactly one smudge: exactly one . or # should be the opposite type.
 
-   1 4 7
-   2 5 8
-   3 6 9
+   In each pattern, you'll need to locate and fix the smudge that causes a different reflection line to be valid. (The old reflection line won't necessarily continue being valid after the smudge is fixed.)
 
-   . . #
-   # . #
-   # . #
+   Here's the above example again:
 
-   . # #
-   . . .
-   # # #
+   #.##..##.
+   ..#.##.#.
+   ##......#
+   ##......#
+   ..#.##.#.
+   ..##..##.
+   #.#.##.#.
+
+   #...##..#
+   #....#..#
+   ..##..###
+   #####.##.
+   #####.##.
+   ..##..###
+   #....#..#
+   The first pattern's smudge is in the top-left corner. If the top-left # were instead ., it would have a different, horizontal line of reflection:
+
+   1 ..##..##. 1
+   2 ..#.##.#. 2
+   3v##......#v3
+   4^##......#^4
+   5 ..#.##.#. 5
+   6 ..##..##. 6
+   7 #.#.##.#. 7
+   With the smudge in the top-left corner repaired, a new horizontal line of reflection between rows 3 and 4 now exists. Row 7 has no corresponding reflected row and can be ignored, but every other row matches exactly: row 1 matches row 6, row 2 matches row 5, and row 3 matches row 4.
+
+   In the second pattern, the smudge can be fixed by changing the fifth symbol on row 2 from . to #:
+
+   1v#...##..#v1
+   2^#...##..#^2
+   3 ..##..### 3
+   4 #####.##. 4
+   5 #####.##. 5
+   6 ..##..### 6
+   7 #....#..# 7
+   Now, the pattern has a different horizontal line of reflection between rows 1 and 2.
+
+   Summarize your notes as before, but instead use the new different reflection lines. In this example, the first pattern's new horizontal line has 3 rows above it and the second pattern's new horizontal line has 1 row above it, summarizing to the value 400.
+
+   In each pattern, fix the smudge and find the different line of reflection. What number do you get after summarizing the new reflection line in each pattern in your notes?
 *)
