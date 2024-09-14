@@ -83,28 +83,39 @@ let transpose mat =
     mat;
   Hashtbl.to_seq mapping |> List.of_seq |> List.sort compare |> List.map snd
 
-let check rows (last_id, last) n =
+let hamming_dist =
+  List.fold_left2 (fun e v1 v2 -> e + if v1 = v2 then 0 else 1) 0
+
+let check rows (last_id, last) n hmdist =
   let potential_starts =
     Hashtbl.to_seq rows
     |> Seq.filter_map (fun (id, l) ->
-           if l = last && id <> last_id && (id = 1 || last_id = n) then Some id
+           if
+             hamming_dist l last <= hmdist
+             && id <> last_id
+             && (id = 1 || last_id = n)
+           then Some id
            else None)
     |> List.of_seq
   in
-  let rec acc lo hi =
-    lo >= hi
-    || (Hashtbl.find rows lo = Hashtbl.find rows hi && acc (lo + 1) (hi - 1))
+  let rec acc lo hi ep =
+    if lo >= hi then ep = hmdist
+    else
+      let ep' =
+        hamming_dist (Hashtbl.find rows lo) (Hashtbl.find rows hi) + ep
+      in
+      ep' <= hmdist && acc (lo + 1) (hi - 1) ep'
   in
   match
     List.find_opt
-      (fun first -> (last_id - first) mod 2 = 1 && acc first last_id)
+      (fun first -> (last_id - first) mod 2 = 1 && acc first last_id 0)
       potential_starts
   with
   | None -> None
   | Some start ->
       if last_id = n then Some ((last_id + start) / 2) else Some (last_id / 2)
 
-let above (mat : char list list) =
+let above hmdist (mat : char list list) =
   (* NOTE: rows are 1-indexed *)
   let n = List.length mat in
   let rows = Hashtbl.create (List.length mat) in
@@ -112,7 +123,9 @@ let above (mat : char list list) =
     match l with
     | h :: t -> (
         Hashtbl.add rows i h;
-        match check rows (i, h) n with None -> scan (i + 1) t | opt -> opt)
+        match check rows (i, h) n hmdist with
+        | None -> scan (i + 1) t
+        | opt -> opt)
     | _ -> None
   in
   scan 1 mat
@@ -122,14 +135,10 @@ let score = function None -> 0 | Some v -> v
 let part_one file =
   let lines = file_lines file in
   let puzzles = patterns lines in
-  (*
-     let up = List.map (fun p -> above p |> score) puzzles in
-     let left = List.map (fun p -> transpose p |> above |> score) puzzles in
-     print_list (fun i -> "Above: " ^ string_of_int i) up;
-     print_list (fun i -> "Left: " ^ string_of_int i) left; *)
   let scores =
     List.map
-      (fun p -> (100 * (above p |> score)) + (transpose p |> above |> score))
+      (fun p ->
+        (100 * (above 0 p |> score)) + (transpose p |> above 0 |> score))
       puzzles
   in
   sum scores
@@ -184,4 +193,29 @@ let part_one file =
    Summarize your notes as before, but instead use the new different reflection lines. In this example, the first pattern's new horizontal line has 3 rows above it and the second pattern's new horizontal line has 1 row above it, summarizing to the value 400.
 
    In each pattern, fix the smudge and find the different line of reflection. What number do you get after summarizing the new reflection line in each pattern in your notes?
+*)
+
+let part_two file =
+  let lines = file_lines file in
+  let puzzles = patterns lines in
+  let puzzles_t = List.map transpose puzzles in
+
+  let up = List.map (fun p -> above 0 p |> score) puzzles in
+  let left = List.map (fun p -> above 0 p |> score) puzzles_t in
+  let up' = List.map (fun p -> above 1 p |> score) puzzles in
+  let left' = List.map (fun p -> above 1 p |> score) puzzles_t in
+
+  let up'' = List.map2 (fun v1 v2 -> if v1 <> v2 then v2 else 0) up up' in
+  let left'' = List.map2 (fun v1 v2 -> if v1 <> v2 then v2 else 0) left left' in
+
+  (List.map (fun v -> 100 * v) up'' |> sum) + sum left''
+
+(*
+   Retro notes:
+   - Finding horizontal vs vertical mirrors is the same problem, just on transposed matrices/puzzles.
+     - Finding horizontal mirrors is slightly easier implementation wise since we're comparing rows instead of columns (across multiple lists).
+   - Initial idea was to just find the two adjacent rows that match. This doesn't work (see example 1).
+   - Noticed that for any mirror line, at least one "end" will fold on top of the other end.  That is, we can simplify this by considering rows as potential "ends" of the mirror range
+   - There is exactly one mirror that results in an exact match (part 1). There is exactly one mirror that results in exactly 1 smudge (part 2).
+   - Part 1 and 2 are virtually the same algorithm. Instead of requiring exactly 0 smudges, we are requiring 1 smudge. This is a small change in the code to verify the hamming distance.
 *)
