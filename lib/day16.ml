@@ -107,10 +107,6 @@ let nexts positions (r, c) dir (nrows, ncols) =
   | Vertical, Down ->
       move_dir (r, c) dir (nrows, ncols) @ move_dir (r, c) dir (nrows, ncols)
   | Horizontal, _ ->
-      (* Printf.printf "horizontal split: %d\n%!"
-         (move_dir (r, c) Left (nrows, ncols)
-          @ move_dir (r, c) Right (nrows, ncols)
-         |> List.length); *)
       move_dir (r, c) Left (nrows, ncols) @ move_dir (r, c) Right (nrows, ncols)
   | Vertical, _ ->
       move_dir (r, c) Up (nrows, ncols) @ move_dir (r, c) Down (nrows, ncols)
@@ -137,18 +133,59 @@ let dfs (r, c, dir) nrows ncols positions =
   aux ();
   Hashtbl.to_seq_keys seen
   |> Seq.map (fun (r, c, _) -> (r, c))
-  |> List.of_seq |> List.sort_uniq compare
+  |> List.of_seq |> List.sort_uniq compare |> List.length
+
+let max_energy starts lines positions =
+  let nrows, ncols = (List.length lines, List.hd lines |> List.length) in
+  List.fold_left
+    (fun acc start -> dfs start nrows ncols positions |> max acc)
+    0 starts
 
 let part_one file =
   let lines = file_lines file |> List.map char_list_of_string in
   let positions = grid_pos lines in
-  (* Printf.printf "size: %d\n%!"
-     (Hashtbl.to_seq_keys positions |> List.of_seq |> List.length); *)
-  let dfs_res =
-    dfs (0, 0, Right) (List.length lines)
-      (List.hd lines |> List.length)
-      positions
-  in
-  (* print_list (fun (r, c) -> Printf.sprintf "(%d,%d)" r c) dfs_res; *)
-  List.length dfs_res
-(* failwith "unimplemented" *)
+  max_energy [ (0, 0, Right) ] lines positions
+
+(*
+   --- Part Two ---
+   As you try to work out what might be wrong, the reindeer tugs on your shirt and leads you to a nearby control panel. There, a collection of buttons lets you align the contraption so that the beam enters from any edge tile and heading away from that edge. (You can choose either of two directions for the beam if it starts on a corner; for instance, if the beam starts in the bottom-right corner, it can start heading either left or upward.)
+
+   So, the beam could start on any tile in the top row (heading downward), any tile in the bottom row (heading upward), any tile in the leftmost column (heading right), or any tile in the rightmost column (heading left). To produce lava, you need to find the configuration that energizes as many tiles as possible.
+
+   In the above example, this can be achieved by starting the beam in the fourth tile from the left in the top row:
+
+   .|<2<\....
+   |v-v\^....
+   .v.v.|->>>
+   .v.v.v^.|.
+   .v.v.v^...
+   .v.v.v^..\
+   .v.v/2\\..
+   <-2-/vv|..
+   .|<<<2-|.\
+   .v//.|.v..
+   Using this configuration, 51 tiles are energized:
+
+   .#####....
+   .#.#.#....
+   .#.#.#####
+   .#.#.##...
+   .#.#.##...
+   .#.#.##...
+   .#.#####..
+   ########..
+   .#######..
+   .#...#.#..
+   Find the initial beam configuration that energizes the largest number of tiles; how many tiles are energized in that configuration?
+*)
+
+let part_two file =
+  let lines = file_lines file |> List.map char_list_of_string in
+  let positions = grid_pos lines in
+  let nrows, ncols = (List.length lines, List.hd lines |> List.length) in
+  let rows, cols = (List.init nrows Fun.id, List.init ncols Fun.id) in
+  let top = List.map (fun c -> (0, c, Down)) cols in
+  let bottom = List.map (fun c -> (nrows - 1, c, Up)) cols in
+  let left = List.map (fun r -> (r, 0, Right)) rows in
+  let right = List.map (fun r -> (r, ncols - 1, Left)) rows in
+  max_energy (top @ bottom @ left @ right) lines positions
