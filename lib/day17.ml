@@ -75,42 +75,60 @@ let turns = function
   | Left | Right -> [ Up; Down ]
   | Up | Down -> [ Left; Right ]
 
+let same_axis d1 d2 = turns d1 = turns d2
+
 let potentials (r, c) (d, steps) heat positions =
   [ (next (r, c) d, (d, steps + 1)) ]
-  @ (turns d |> List.map (fun d' -> (next (r, c) d', (d', 0))))
-  |> List.filter_map (fun ((r', c'), (d', steps')) ->
-         if steps' > 3 || not (Hashtbl.mem positions (r', c')) then None
-         else
-           Some ((r', c'), (d', steps'), heat + Hashtbl.find positions (r', c')))
+  @ (turns d |> List.map (fun d' -> (next (r, c) d', (d', 1))))
+  |> List.filter_map (fun (pos', (d', steps')) ->
+         if steps' > 3 || not (Hashtbl.mem positions pos') then None
+         else Some (pos', (d', steps'), heat + Hashtbl.find positions pos'))
 
 let dfs positions memo =
   let rec aux stack =
-    Printf.printf "Stack: %d, %d\n%!" (List.length stack) (Hashtbl.length memo);
+    (* Printf.printf "Stack: %d, %d\n%!" (List.length stack) (Hashtbl.length memo); *)
     match stack with
     | [] -> print_endline "stack empty"
     | ((r, c), (d, s), h) :: t -> (
-        Printf.printf "Processing (%d,%d) with %s,%d and heat %d\n%!" r c (match d with Left -> "left" | Right -> "right" | Up -> "up" | Down -> "down") s h;
-        if s > 3 then aux t
+        if
+          (* Printf.printf "Processing (%d,%d) with %s,%d and heat %d\n%!" r c
+             (match d with
+             | Left -> "left"
+             | Right -> "right"
+             | Up -> "up"
+             | Down -> "down")
+             s h; *)
+          s > 3
+        then
+          Invalid_argument
+            "Found a move in stack with > 3 steps. This should not happen."
+          |> raise
         else
           match Hashtbl.find_opt memo (r, c) with
           | None ->
-              print_endline "None case";
+              (* print_endline "None case"; *)
               update memo (r, c) (d, s) h;
               aux (potentials (r, c) (d, s) h positions @ t)
           | Some inner ->
               if
                 Hashtbl.to_seq inner
-                |> Seq.exists (fun ((d', s'), h') -> (d' = d && s' <= s && h' < h))
-                |> not
-              then (
-                print_endline "positive if";
+                |> Seq.exists (fun ((d', s'), h') ->
+                       same_axis d' d && s' <= s && h' <= h)
+              then aux t
+              else (
+                (* print_endline "negative if"; *)
                 update memo (r, c) (d, s) h;
-                aux (potentials (r, c) (d, s) h positions @ t))
-              else (aux t))
+                aux (potentials (r, c) (d, s) h positions @ t)))
   in
   aux [ ((0, 0), (Right, 0), 0); ((0, 0), (Down, 0), 0) ]
 
 let lowest_heat memo nr nc =
+  (* print_list
+     (fun a -> failwith "")
+     (Hashtbl.to_seq memo
+     |> Seq.find (fun ((r, c), inner) ->
+            Some (Hashtbl.to_seq_values inner |> List.of_seq))
+     |> List.of_seq); *)
   match
     Hashtbl.to_seq memo
     |> Seq.filter_map (fun ((r, c), inner) ->
@@ -125,11 +143,9 @@ let lowest_heat memo nr nc =
         (Printf.sprintf "Unknown lowest heat for bottom right corner. Len %d"
            (List.length l))
 
-let grid_pos lines =
-  let positions = Hashtbl.create 1000 in
-  List.iteri
-    (fun r line -> List.iteri (fun c v -> Hashtbl.add positions (r, c) v) line)
-    lines;
+let grid_pos lines size =
+  let positions = Hashtbl.create size in
+  List.iteri (fun r -> List.iteri (fun c -> Hashtbl.add positions (r, c))) lines;
   positions
 
 let part_one file =
@@ -139,7 +155,10 @@ let part_one file =
            char_list_of_string s
            |> List.map (fun c -> int_of_char c - int_of_char '0'))
   in
-  let positions = grid_pos lines in
-  let memo = Hashtbl.create 1000 in
+  let nr, nc = (List.length lines, List.hd lines |> List.length) in
+  let positions = grid_pos lines (nr * nc) in
+  let memo = Hashtbl.create (nr * nc) in
   dfs positions memo;
-  lowest_heat memo (List.length lines) (List.hd lines |> List.length)
+  let ans = lowest_heat memo nr nc in
+  Printf.printf "(%d,%d)\n%!" nr nc;
+  ans
