@@ -53,6 +53,78 @@
 
 open Utils
 
+type dirs = Left | Right | Up | Down
+
+(* Memo: (r,c) -> ((dir,steps) -> heat) *)
+let update tbl (r, c) (d, steps) heat =
+  let inner =
+    match Hashtbl.find_opt tbl (r, c) with
+    | None -> Hashtbl.create 16
+    | Some t -> t
+  in
+  Hashtbl.replace inner (d, steps) heat;
+  Hashtbl.replace tbl (r, c) inner
+
+let next (r, c) = function
+  | Left -> (r, c - 1)
+  | Right -> (r, c + 1)
+  | Up -> (r - 1, c)
+  | Down -> (r + 1, c)
+
+let turns = function
+  | Left | Right -> [ Up; Down ]
+  | Up | Down -> [ Left; Right ]
+
+let potentials (r, c) (d, steps) heat positions =
+  [ (next (r, c) d, (d, steps + 1)) ]
+  @ (turns d |> List.map (fun d' -> (next (r, c) d', (d', 0))))
+  |> List.filter_map (fun ((r', c'), (d', steps')) ->
+         if steps' > 3 || not (Hashtbl.mem positions (r', c')) then None
+         else
+           Some ((r', c'), (d', steps'), heat + Hashtbl.find positions (r', c')))
+
+let dfs positions memo =
+  let rec aux stack =
+    Printf.printf "Stack: %d, %d\n%!" (List.length stack) (Hashtbl.length memo);
+    match stack with
+    | [] -> print_endline "stack empty"
+    | ((r, c), (d, s), h) :: t -> (
+        Printf.printf "Processing (%d,%d) with %s,%d and heat %d\n%!" r c (match d with Left -> "left" | Right -> "right" | Up -> "up" | Down -> "down") s h;
+        if s > 3 then aux t
+        else
+          match Hashtbl.find_opt memo (r, c) with
+          | None ->
+              print_endline "None case";
+              update memo (r, c) (d, s) h;
+              aux (potentials (r, c) (d, s) h positions @ t)
+          | Some inner ->
+              if
+                Hashtbl.to_seq inner
+                |> Seq.exists (fun ((d', s'), h') -> (d' = d && s' <= s && h' < h))
+                |> not
+              then (
+                print_endline "positive if";
+                update memo (r, c) (d, s) h;
+                aux (potentials (r, c) (d, s) h positions @ t))
+              else (aux t))
+  in
+  aux [ ((0, 0), (Right, 0), 0); ((0, 0), (Down, 0), 0) ]
+
+let lowest_heat memo nr nc =
+  match
+    Hashtbl.to_seq memo
+    |> Seq.filter_map (fun ((r, c), inner) ->
+           if (r, c) = (nr - 1, nc - 1) then
+             Some (Hashtbl.to_seq_values inner |> Seq.fold_left min max_int)
+           else None)
+    |> List.of_seq
+  with
+  | [ h ] -> h
+  | l ->
+      failwith
+        (Printf.sprintf "Unknown lowest heat for bottom right corner. Len %d"
+           (List.length l))
+
 let grid_pos lines =
   let positions = Hashtbl.create 1000 in
   List.iteri
@@ -68,4 +140,6 @@ let part_one file =
            |> List.map (fun c -> int_of_char c - int_of_char '0'))
   in
   let positions = grid_pos lines in
-  failwith "unimplemented"
+  let memo = Hashtbl.create 1000 in
+  dfs positions memo;
+  lowest_heat memo (List.length lines) (List.hd lines |> List.length)
