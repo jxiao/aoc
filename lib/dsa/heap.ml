@@ -38,16 +38,16 @@ module H : HeapInterface.HEAP = struct
 
   let push = insert
 
-  let rec remove_root t =
+  let rec remove_last t =
     match t with
     | Empty -> (None, Empty)
     | Node (Empty, (v, _), Empty) -> (Some v, Empty)
     | Node (lt, (v, s), rt) ->
         if is_full t || (not @@ is_full rt) then
-          let h, child = remove_root rt in
+          let h, child = remove_last rt in
           (h, Node (lt, (v, s - 1), child))
         else
-          let h, child = remove_root lt in
+          let h, child = remove_last lt in
           (h, Node (child, (v, s - 1), rt))
 
   let rec heapify_root t =
@@ -58,8 +58,6 @@ module H : HeapInterface.HEAP = struct
         else Node (heapify_root (Node (llt, (v, ls), lrt)), (lv, s), Empty)
     | Node (Empty, (_), Node (_)) ->
       failwith "Impossible for heap to have an empty left subtree and non-empty right subtree."
-        (* if v <= rv then t
-        else Node (Empty, (rv, s), heapify_root (Node (rlt, (v, rs), rrt))) *)
     | Node
         ( (Node (llt, (lv, ls), lrt) as lt),
           (v, s),
@@ -79,7 +77,7 @@ module H : HeapInterface.HEAP = struct
   let pop_opt t =
     let res = peek_opt t in
     let remaining =
-      match remove_root t with
+      match remove_last t with
       | None, _ -> Empty
       | Some v', Empty -> Node (Empty, (v', 1), Empty)
       | Some v', Node (lt, (_, s), rt) -> heapify_root (Node (lt, (v', s), rt))
