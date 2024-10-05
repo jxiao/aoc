@@ -81,7 +81,7 @@ let card_points line =
   let winning_vals, your_vals = (make_set wins_str, make_set your_str) in
   let matches = ISet.inter winning_vals your_vals in
   let num_matches = ISet.cardinal matches in
-  match num_matches with 0 -> 0 | 1 -> 1 | n -> pow 2 (n - 1)
+  match num_matches with 0 -> 0 | n -> pow 2 (n - 1)
 
 let part_one file =
   let lines = file_lines file in
