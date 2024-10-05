@@ -56,8 +56,10 @@ module H : HeapInterface.HEAP = struct
     | Node (Node (llt, (lv, ls), lrt), (v, s), Empty) ->
         if v <= lv then t
         else Node (heapify_root (Node (llt, (v, ls), lrt)), (lv, s), Empty)
-    | Node (Empty, (_), Node (_)) ->
-      failwith "Impossible for heap to have an empty left subtree and non-empty right subtree."
+    | Node (Empty, _, Node _) ->
+        failwith
+          "Impossible for heap to have an empty left subtree and non-empty \
+           right subtree."
     | Node
         ( (Node (llt, (lv, ls), lrt) as lt),
           (v, s),

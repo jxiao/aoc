@@ -56,13 +56,20 @@ open Dsa.Heap.H
 
 type dirs = Left | Right | Up | Down
 
-module T = struct
+module S = struct
   type t = (int * int) * (dirs * int)
 
   let compare = compare
 end
 
-module TSet = Set.Make (T)
+module T = struct
+  type t = int * int
+
+  let compare = compare
+end
+
+module SSet = Set.Make (S)
+module TMap = Map.Make (T)
 
 let next (r, c) = function
   | Left -> (r, c - 1)
@@ -75,41 +82,42 @@ let turns = function
   | Up | Down -> [ Left; Right ]
 
 let dijkstra positions dest valid min_steps =
-  (* Printf.printf "Stack: %d, %d\n%!" (List.length stack) (Hashtbl.length memo); *)
   let rec aux h seen =
-    (* print_endline "About to pop"; *)
     match pop_opt h with
     | None, _ -> failwith "No solution"
-    (* | [] -> print_endline "stack empty" *)
     | Some (heat, (r, c), (d, s)), h' ->
-        (* print_endline "Found SOme"; *)
         if (r, c) = dest && s >= min_steps then heat
-        else if TSet.mem ((r, c), (d, s)) seen then aux h' seen
+        else if SSet.mem ((r, c), (d, s)) seen then aux h' seen
         else
-          let seen' = TSet.add ((r, c), (d, s)) seen in
+          let seen' = SSet.add ((r, c), (d, s)) seen in
           let next_heap =
             d :: turns d
             |> List.filter (fun d' -> valid d d' s)
             |> List.map (fun d' ->
                    (next (r, c) d', (d', if d' = d then s + 1 else 1)))
-            |> List.filter (fun ((r', c'), _) -> Hashtbl.mem positions (r', c'))
+            |> List.filter (fun ((r', c'), _) -> TMap.mem (r', c') positions)
             |> List.filter (fun ((r', c'), (d', s')) ->
-                   TSet.mem ((r', c'), (d', s')) seen |> not)
+                   SSet.mem ((r', c'), (d', s')) seen |> not)
             |> List.map (fun ((r', c'), (d', s')) ->
-                   (heat + Hashtbl.find positions (r', c'), (r', c'), (d', s')))
+                   (heat + TMap.find (r', c') positions, (r', c'), (d', s')))
             |> List.fold_left (fun acc v -> push acc v) h'
           in
-          Printf.printf "size: %d\n%!" (size next_heap);
           aux next_heap seen'
   in
   aux
     (push (push (create ()) (0, (0, 0), (Right, 0))) (0, (0, 0), (Down, 0)))
-    TSet.empty
+    SSet.empty
 
-let grid_pos lines size =
-  let positions = Hashtbl.create size in
-  List.iteri (fun r -> List.iteri (fun c -> Hashtbl.add positions (r, c))) lines;
-  positions
+let grid_pos lines =
+  List.fold_left
+    (fun (r, racc) line ->
+      ( r + 1,
+        snd
+        @@ List.fold_left
+             (fun (c, lacc) v -> (c + 1, TMap.add (r, c) v lacc))
+             (0, racc) line ))
+    (0, TMap.empty) lines
+  |> snd
 
 let part_one file =
   let lines =
@@ -119,52 +127,51 @@ let part_one file =
            |> List.map (fun c -> int_of_char c - int_of_char '0'))
   in
   let nr, nc = (List.length lines, List.hd lines |> List.length) in
-  let positions = grid_pos lines (nr * nc) in
+  let positions = grid_pos lines in
   dijkstra positions (nr - 1, nc - 1) (fun d d' s -> s < 3 || d <> d') 1
 
+(*
+   --- Part Two ---
+   The crucibles of lava simply aren't large enough to provide an adequate supply of lava to the machine parts factory. Instead, the Elves are going to upgrade to ultra crucibles.
 
-(* 
---- Part Two ---
-The crucibles of lava simply aren't large enough to provide an adequate supply of lava to the machine parts factory. Instead, the Elves are going to upgrade to ultra crucibles.
+   Ultra crucibles are even more difficult to steer than normal crucibles. Not only do they have trouble going in a straight line, but they also have trouble turning!
 
-Ultra crucibles are even more difficult to steer than normal crucibles. Not only do they have trouble going in a straight line, but they also have trouble turning!
+   Once an ultra crucible starts moving in a direction, it needs to move a minimum of four blocks in that direction before it can turn (or even before it can stop at the end). However, it will eventually start to get wobbly: an ultra crucible can move a maximum of ten consecutive blocks without turning.
 
-Once an ultra crucible starts moving in a direction, it needs to move a minimum of four blocks in that direction before it can turn (or even before it can stop at the end). However, it will eventually start to get wobbly: an ultra crucible can move a maximum of ten consecutive blocks without turning.
+   In the above example, an ultra crucible could follow this path to minimize heat loss:
 
-In the above example, an ultra crucible could follow this path to minimize heat loss:
+   2>>>>>>>>1323
+   32154535v5623
+   32552456v4254
+   34465858v5452
+   45466578v>>>>
+   143859879845v
+   445787698776v
+   363787797965v
+   465496798688v
+   456467998645v
+   122468686556v
+   254654888773v
+   432267465553v
+   In the above example, an ultra crucible would incur the minimum possible heat loss of 94.
 
-2>>>>>>>>1323
-32154535v5623
-32552456v4254
-34465858v5452
-45466578v>>>>
-143859879845v
-445787698776v
-363787797965v
-465496798688v
-456467998645v
-122468686556v
-254654888773v
-432267465553v
-In the above example, an ultra crucible would incur the minimum possible heat loss of 94.
+   Here's another example:
 
-Here's another example:
+   111111111111
+   999999999991
+   999999999991
+   999999999991
+   999999999991
+   Sadly, an ultra crucible would need to take an unfortunate path like this one:
 
-111111111111
-999999999991
-999999999991
-999999999991
-999999999991
-Sadly, an ultra crucible would need to take an unfortunate path like this one:
+   1>>>>>>>1111
+   9999999v9991
+   9999999v9991
+   9999999v9991
+   9999999v>>>>
+   This route causes the ultra crucible to incur the minimum possible heat loss of 71.
 
-1>>>>>>>1111
-9999999v9991
-9999999v9991
-9999999v9991
-9999999v>>>>
-This route causes the ultra crucible to incur the minimum possible heat loss of 71.
-
-Directing the ultra crucible from the lava pool to the machine parts factory, what is the least heat loss it can incur?
+   Directing the ultra crucible from the lava pool to the machine parts factory, what is the least heat loss it can incur?
 *)
 
 let part_two file =
@@ -175,6 +182,12 @@ let part_two file =
            |> List.map (fun c -> int_of_char c - int_of_char '0'))
   in
   let nr, nc = (List.length lines, List.hd lines |> List.length) in
-  let positions = grid_pos lines (nr * nc) in
-  let min_steps, max_steps = 4,10 in
-  dijkstra positions (nr - 1, nc - 1) (fun d d' s -> (s >= min_steps && s < max_steps) || (s < min_steps && d = d') || (s >= max_steps && d <> d')) 4
+  let positions = grid_pos lines in
+  let min_steps, max_steps = (4, 10) in
+  dijkstra positions
+    (nr - 1, nc - 1)
+    (fun d d' s ->
+      (s >= min_steps && s < max_steps)
+      || (s < min_steps && d = d')
+      || (s >= max_steps && d <> d'))
+    4
