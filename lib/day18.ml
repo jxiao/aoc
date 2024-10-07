@@ -57,7 +57,10 @@ let str_to_dir = function
   | "L" | "2" -> L
   | "U" | "3" -> U
   | "D" | "1" -> D
-  | s -> raise @@ Invalid_argument (Printf.sprintf "Unknown string. Cannot map to direction: %s" s)
+  | s ->
+      raise
+      @@ Invalid_argument
+           (Printf.sprintf "Unknown string. Cannot map to direction: %s" s)
 
 let dir_offset = function
   | R -> (0, 1)
@@ -146,8 +149,7 @@ let hex s =
        (0, 0)
   |> snd
 
-let extract s =
-  (String.sub s 0 5, String.sub s 5 1)
+let extract s = (String.sub s 0 5, String.sub s 5 1)
 
 let part_two file =
   let lines = file_lines file |> List.map parse in
