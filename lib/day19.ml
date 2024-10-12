@@ -185,3 +185,67 @@ let part_one file =
 
    Consider only your list of workflows; the list of part ratings that the Elves wanted you to sort is no longer relevant. How many distinct combinations of ratings will be accepted by the Elves' workflows?
 *)
+
+(*
+   Kudos to @EricKalkman for the solution. Here's a transcribed version using my datatypes.
+   https://github.com/EricKalkman/AoC2023/blob/master/lib/day19.ml
+*)
+
+let count_paths rules =
+  let rec count filters = function
+    | Reject -> 0
+    | Accept ->
+        let range = Seq.ints 1 |> Seq.take 4000 in
+        let counter cat =
+          Seq.filter (CMap.find cat filters) range |> Seq.length
+        in
+        counter X * counter M * counter A * counter S
+    | Workflow s ->
+        let workflow = SMap.find s rules in
+        let conditionals = List.filter (fun (c, _) -> c <> NA) workflow in
+        let counts, elsefuncs =
+          conditionals
+          |> List.fold_left
+               (fun (c, fs) (cond, r) ->
+                 let cat, comp, i =
+                   match cond with
+                   | NA -> failwith "Impossible"
+                   | Cond (cat, comp, i) -> (cat, comp, i)
+                 in
+                 let eval x = match comp with LT -> x < i | GT -> x > i in
+                 let curr_fs =
+                   CMap.update cat
+                     (fun opt ->
+                       match opt with
+                       | None -> failwith "Impossible"
+                       | Some fs' -> Some (fun x -> fs' x && eval x))
+                     fs
+                 in
+                 let curr_count = count curr_fs r in
+                 let next_fs =
+                   CMap.update cat
+                     (fun opt ->
+                       match opt with
+                       | None -> failwith "Impossible"
+                       | Some fs' -> Some (fun x -> fs' x && (not @@ eval x)))
+                     fs
+                 in
+                 (c + curr_count, next_fs))
+               (0, filters)
+        in
+        let elsecount =
+          count elsefuncs
+            (List.filter (fun (c, _) -> c = NA) workflow |> List.hd |> snd)
+        in
+        counts + elsecount
+  in
+  let true_fn _ = true in
+  let start =
+    [ (X, true_fn); (M, true_fn); (A, true_fn); (S, true_fn) ] |> CMap.of_list
+  in
+  count start (Workflow "in")
+
+let part_two file =
+  let lines = file_lines file in
+  let r, _ = split lines in
+  count_paths @@ build_rules r
