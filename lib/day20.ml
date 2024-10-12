@@ -161,8 +161,6 @@ let populate_conjunctions (modules : modoole S.t) =
         (fun (acc' : modoole S.t) neighbor ->
           match S.find neighbor acc' with
           | { kind = Conjunction np; name; _ } ->
-              Printf.printf "UPDATING: name=%s, curr=%s, neighbor=%s\n%!" name
-                curr_mod.name neighbor;
               let np' = S.add curr_mod.name Low np in
               update acc' name (fun r -> { r with kind = Conjunction np' })
           | _ -> acc')
@@ -171,69 +169,69 @@ let populate_conjunctions (modules : modoole S.t) =
 
 let rec process modules acc q =
   match q with
-  | { sender; recipient; pulse } :: t -> (
-      let counts =
-        acc
-        ++ {
-             low = (if pulse = Low then 1 else 0);
-             high = (if pulse = High then 1 else 0);
-           }
-      in
-      Printf.printf "Searching for '%s'\n%!" recipient;
+  | { sender; recipient; pulse } :: t ->
       let modoole = S.find recipient modules in
-      match modoole.kind with
-      | Button ->
-          process modules counts
-            (t
-            @ [
+      let modules', extras =
+        match modoole.kind with
+        | Button ->
+            ( modules,
+              [
                 {
                   sender = modoole.name;
                   recipient = broadcaster_name;
                   pulse = Low;
                 };
-              ])
-      | Broadcaster ->
-          process modules counts
-            (t
-            @ List.map
+              ] )
+        | Broadcaster ->
+            ( modules,
+              List.map
                 (fun recipient -> { sender = modoole.name; recipient; pulse })
-                modoole.neighbors)
-      | FlipFlop st ->
-          if pulse = High then process modules counts t
-          else (
-            Printf.printf "updating\n%!";
-            let modules' =
-              update modules modoole.name (fun r ->
-                  { r with kind = FlipFlop (if st = On then Off else On) })
-            in
-            process modules' counts
-              (t
-              @ List.map
+                modoole.neighbors )
+        | FlipFlop st ->
+            if pulse = High then (modules, [])
+            else
+              let modules' =
+                update modules modoole.name (fun r ->
+                    { r with kind = FlipFlop (if st = On then Off else On) })
+              in
+              ( modules',
+                List.map
                   (fun recipient ->
                     {
                       recipient;
                       pulse = (if st = Off then High else Low);
                       sender = modoole.name;
                     })
-                  modoole.neighbors))
-      | Conjunction np ->
-          Printf.printf "Update conjunction for %s (sender=%s)\n%!" modoole.name
-            sender;
-          let np' = update np sender (fun _ -> pulse) in
-          let modules' =
-            update modules modoole.name (fun r ->
-                { r with kind = Conjunction np' })
-          in
-          let pulse' =
-            if S.bindings np' |> List.for_all (fun (_, p) -> p = High) then Low
-            else High
-          in
-          process modules' counts
-            (t
-            @ List.map
+                  modoole.neighbors )
+        | Conjunction np ->
+            let np' = update np sender (fun _ -> pulse) in
+            let modules' =
+              update modules modoole.name (fun r ->
+                  { r with kind = Conjunction np' })
+            in
+            let pulse' =
+              if S.bindings np' |> List.for_all (fun (_, p) -> p = High) then
+                Low
+              else High
+            in
+            ( modules',
+              List.map
                 (fun recipient ->
                   { recipient; pulse = pulse'; sender = modoole.name })
-                modoole.neighbors))
+                modoole.neighbors )
+      in
+      let counts =
+        acc
+        ++ {
+             low =
+               List.filter (fun { pulse; _ } -> pulse = Low) extras
+               |> List.length;
+             high =
+               List.filter (fun { pulse; _ } -> pulse = High) extras
+               |> List.length;
+           }
+      in
+      process modules' counts (t @ extras)
   | _ -> (modules, acc)
 
 let press_button modules =
@@ -248,7 +246,6 @@ let part_one file =
     |> List.map (fun r -> (r.name, r))
     |> S.of_list |> populate_conjunctions
   in
-  Printf.printf "modules size=%d\n%!" (S.cardinal modules);
   let _, counts =
     List.fold_left
       (fun (modules', acc') _ ->
