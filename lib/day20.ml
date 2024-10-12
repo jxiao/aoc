@@ -159,8 +159,8 @@ let populate_conjunctions (modules : modoole S.t) =
     (fun (acc : modoole S.t) (curr_mod : modoole) ->
       List.fold_left
         (fun (acc' : modoole S.t) neighbor ->
-          match S.find neighbor acc' with
-          | { kind = Conjunction np; name; _ } ->
+          match S.find_opt neighbor acc' with
+          | Some { kind = Conjunction np; name; _ } ->
               let np' = S.add curr_mod.name Low np in
               update acc' name (fun r -> { r with kind = Conjunction np' })
           | _ -> acc')
@@ -170,28 +170,23 @@ let populate_conjunctions (modules : modoole S.t) =
 let rec process modules acc q =
   match q with
   | { sender; recipient; pulse } :: t ->
-      let modoole = S.find recipient modules in
+      let modoole = S.find_opt recipient modules in
       let modules', extras =
-        match modoole.kind with
-        | Button ->
+        match modoole with
+        | Some { name; kind = Button; _ } ->
             ( modules,
-              [
-                {
-                  sender = modoole.name;
-                  recipient = broadcaster_name;
-                  pulse = Low;
-                };
-              ] )
-        | Broadcaster ->
+              [ { sender = name; recipient = broadcaster_name; pulse = Low } ]
+            )
+        | Some { name; neighbors; kind = Broadcaster } ->
             ( modules,
               List.map
-                (fun recipient -> { sender = modoole.name; recipient; pulse })
-                modoole.neighbors )
-        | FlipFlop st ->
+                (fun recipient -> { sender = name; recipient; pulse })
+                neighbors )
+        | Some { name; neighbors; kind = FlipFlop st } ->
             if pulse = High then (modules, [])
             else
               let modules' =
-                update modules modoole.name (fun r ->
+                update modules name (fun r ->
                     { r with kind = FlipFlop (if st = On then Off else On) })
               in
               ( modules',
@@ -200,14 +195,13 @@ let rec process modules acc q =
                     {
                       recipient;
                       pulse = (if st = Off then High else Low);
-                      sender = modoole.name;
+                      sender = name;
                     })
-                  modoole.neighbors )
-        | Conjunction np ->
+                  neighbors )
+        | Some { name; neighbors; kind = Conjunction np } ->
             let np' = update np sender (fun _ -> pulse) in
             let modules' =
-              update modules modoole.name (fun r ->
-                  { r with kind = Conjunction np' })
+              update modules name (fun r -> { r with kind = Conjunction np' })
             in
             let pulse' =
               if S.bindings np' |> List.for_all (fun (_, p) -> p = High) then
@@ -216,9 +210,9 @@ let rec process modules acc q =
             in
             ( modules',
               List.map
-                (fun recipient ->
-                  { recipient; pulse = pulse'; sender = modoole.name })
-                modoole.neighbors )
+                (fun recipient -> { recipient; pulse = pulse'; sender = name })
+                neighbors )
+        | None -> (modules, [])
       in
       let counts =
         acc
@@ -256,3 +250,10 @@ let part_one file =
   in
   Printf.printf "low=%d \t high=%d\n%!" counts.low counts.high;
   counts.low * counts.high
+
+(*
+   --- Part Two ---
+   The final machine responsible for moving the sand down to Island Island has a module attached named rx. The machine turns on when a single low pulse is sent to rx.
+
+   Reset all modules to their default states. Waiting for all pulses to be fully handled after each button press, what is the fewest number of button presses required to deliver a single low pulse to the module named rx?
+*)
