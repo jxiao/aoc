@@ -167,7 +167,7 @@ let populate_conjunctions (modules : modoole S.t) =
         acc curr_mod.neighbors)
     modules mods
 
-let rec process modules acc q =
+let rec process modules acc q penultimates iter_num =
   match q with
   | { sender; recipient; pulse } :: t ->
       let modoole = S.find_opt recipient modules in
@@ -225,25 +225,35 @@ let rec process modules acc q =
                |> List.length;
            }
       in
-      process modules' counts (t @ extras)
-  | _ -> (modules, acc)
+      let penultimates' =
+        S.update sender
+          (fun opt ->
+            match (opt, pulse) with
+            | Some None, High -> Some (Some iter_num)
+            | _ -> opt)
+          penultimates
+      in
+      process modules' counts (t @ extras) penultimates' iter_num
+  | _ -> (modules, acc, penultimates)
 
-let press_button modules =
+let press_button ?(penultimates = S.empty) iter_num modules =
   process modules { low = 0; high = 0 }
     [ { sender = button_name; recipient = button_name; pulse = Low } ]
+    penultimates iter_num
+
+let build_modooles lines =
+  { name = button_name; kind = Button; neighbors = [ broadcaster_name ] }
+  :: List.map parse_line lines
+  |> List.map (fun r -> (r.name, r))
+  |> S.of_list |> populate_conjunctions
 
 let part_one file =
   let lines = file_lines file in
-  let modules =
-    { name = button_name; kind = Button; neighbors = [ broadcaster_name ] }
-    :: List.map parse_line lines
-    |> List.map (fun r -> (r.name, r))
-    |> S.of_list |> populate_conjunctions
-  in
+  let modules = build_modooles lines in
   let _, counts =
     List.fold_left
-      (fun (modules', acc') _ ->
-        let m'', acc'' = press_button modules' in
+      (fun (modules', acc') i ->
+        let m'', acc'', _ = press_button (i + 1) modules' in
         (m'', acc' ++ acc''))
       (modules, { low = 0; high = 0 })
       (List.init 1000 Fun.id)
@@ -257,3 +267,35 @@ let part_one file =
 
    Reset all modules to their default states. Waiting for all pulses to be fully handled after each button press, what is the fewest number of button presses required to deliver a single low pulse to the module named rx?
 *)
+
+let rec gcd a b = if b = 0 then a else gcd b (a mod b)
+let lcm a b = a * b / gcd a b
+let lcm_multiple = List.fold_left lcm 1
+
+let find_final_connections modules tgt =
+  let final =
+    S.bindings modules
+    |> List.filter_map (fun (_, { name; neighbors; _ }) ->
+           if List.mem tgt neighbors then Some name else None)
+    |> List.hd
+  in
+  let penultimates =
+    S.filter_map
+      (fun _ { neighbors; _ } ->
+        if List.mem final neighbors then Some None else None)
+      modules
+  in
+  (final, penultimates)
+
+let part_two file =
+  let lines = file_lines file in
+  let modules = build_modooles lines in
+  let _, penultimates = find_final_connections modules "rx" in
+  let _, p_counts =
+    List.fold_left
+      (fun (macc, pacc) i ->
+        let macc', _, pacc' = press_button ~penultimates:pacc (i + 1) macc in
+        (macc', pacc'))
+      (modules, penultimates) (List.init 5000 Fun.id)
+  in
+  S.bindings p_counts |> List.filter_map snd |> lcm_multiple
