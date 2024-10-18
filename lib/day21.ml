@@ -143,7 +143,6 @@ let part_one file =
       (S.of_list [ (r, c) ])
       (List.init 64 Fun.id)
   in
-  print_list (fun (r, c) -> Printf.sprintf "(%d,%d) " r c) (S.to_list res);
   S.cardinal res
 
 (*
@@ -203,41 +202,61 @@ let part_one file =
    However, the step count the Elf needs is much larger! Starting from the garden plot marked S on your infinite map, how many garden plots could the Elf reach in exactly 26501365 steps?
 *)
 
-let calibrate (r, c) (nr, nc) =
-  let dr,dc = r mod nr, c mod nc in
-  let r' = if dr < 0 then nr + dr else dr in
-  let c' = if dc < 0 then nc + dc else dc in
-  (r',c')
+(* Savior: https://advent-of-code.xavd.id/writeups/2023/day/21/ *)
 
-let rec bfs_with_overflow (nr, nc) pos curr next =
-  match curr with
-  | [] -> next
-  | (r, c) :: t ->
-      let valid_neighbors =
-        adjs (r, c)
-        |> List.filter_map (fun (r', c') ->
-               let r'', c'' = calibrate (r', c') (nr, nc) in
-               (* Printf.printf "Searching for (%d,%d) from (%d,%d)\n%!" r'' c'' r' c'; *)
-               if (M.find (r'', c'') pos).plot = Rock then None
-               else Some (r', c'))
-      in
-      bfs_with_overflow (nr, nc) pos t
-        (List.fold_left (fun acc p -> S.add p acc) next valid_neighbors)
+let rec bfs_with_visited (nr, nc) pos visited = function
+  | [] -> visited
+  | (d, (r, c)) :: t ->
+      if M.mem (r, c) visited then bfs_with_visited (nr, nc) pos visited t
+      else
+        let valid_neighbors =
+          adjs (r, c)
+          |> List.filter_map (fun (r', c') ->
+                 if
+                   r' < 0 || c' < 0 || r' >= nr || c' >= nc
+                   || M.mem (r', c') visited
+                   || (M.find (r', c') pos).plot = Rock
+                 then None
+                 else Some (d + 1, (r', c')))
+        in
+        let visited' = M.add (r, c) d visited in
+        bfs_with_visited (nr, nc) pos visited' (t @ valid_neighbors)
+
+let ( ** ) x y = float_of_int x ** float_of_int y |> int_of_float
 
 let part_two file =
   let lines = file_lines file |> List.map char_list_of_string in
   let pos = positions lines in
   let nr, nc = (List.length lines, List.hd lines |> List.length) in
+  let dist_to_edge = nr / 2 in
+  let n = (26501365 - dist_to_edge) / nr in
+  let n_odd_tiles, n_even_tiles = ((n + 1) ** 2, n ** 2) in
   let r, c =
     M.bindings pos
     |> List.filter (fun (_, { plot; _ }) -> plot = Start)
     |> List.hd |> fst
   in
-  let res =
-    List.fold_left
-      (fun acc _ -> bfs_with_overflow (nr, nc) pos (S.to_list acc) S.empty)
-      (S.of_list [ (r, c) ])
-      (List.init 500 Fun.id)
+  let visited = bfs_with_visited (nr, nc) pos M.empty [ (0, (r, c)) ] in
+  let odd_corners =
+    M.bindings visited
+    |> List.filter (fun (_, d) -> d > dist_to_edge && d mod 2 = 1)
+    |> List.length
   in
-  (* print_list (fun (r, c) -> Printf.sprintf "(%d,%d) " r c) (S.to_list res); *)
-  S.cardinal res
+  let even_corners =
+    M.bindings visited
+    |> List.filter (fun (_, d) -> d > dist_to_edge && d mod 2 = 0)
+    |> List.length
+  in
+  let odds =
+    M.bindings visited |> List.filter (fun (_, d) -> d mod 2 = 1) |> List.length
+  in
+  let evens =
+    M.bindings visited |> List.filter (fun (_, d) -> d mod 2 = 0) |> List.length
+  in
+  (n_odd_tiles * odds) + (n_even_tiles * evens)
+  - ((n + 1) * odd_corners)
+  + (n * even_corners)
+
+(*
+   Post-game recap: not a fan of this problem.
+*)
