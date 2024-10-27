@@ -41,6 +41,14 @@ let modules =
     (15, [ Aoc.Day15.part_one; Aoc.Day15.part_two ]);
     (16, [ Aoc.Day16.part_one; Aoc.Day16.part_two ]);
     (17, [ Aoc.Day17.part_one; Aoc.Day17.part_two ]);
+    (18, [ Aoc.Day18.part_one; Aoc.Day18.part_two ]);
+    (19, [ Aoc.Day19.part_one; Aoc.Day19.part_two ]);
+    (20, [ Aoc.Day20.part_one; Aoc.Day20.part_two ]);
+    (21, [ Aoc.Day21.part_one; Aoc.Day21.part_two ]);
+    (22, [ Aoc.Day22.part_one; Aoc.Day22.part_two ]);
+    (23, [ Aoc.Day23.part_one; Aoc.Day23.part_two ]);
+    (24, [ Aoc.Day24.part_one; Aoc.Day24.part_two ]);
+    (25, [ Aoc.Day25.part_one ]);
   ]
 
 let exec_day d parts =

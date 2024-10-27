@@ -5,6 +5,7 @@ let print_list f l =
 
 let char_list_of_string s = s |> String.to_seq |> List.of_seq
 let sum = List.fold_left ( + ) 0
+let string_of_char c = List.to_seq [ c ] |> String.of_seq
 
 let digit_opt c =
   match c with
