@@ -80,14 +80,16 @@ let build_graph lines =
   in
   aux SM.empty lines
 
+let set_minus_size s1 s2 = SS.cardinal s1 - (SS.inter s1 s2 |> SS.cardinal)
+
 let part_one file =
   let lines = file_lines file in
   let graph = build_graph lines in
   let nodes = SM.bindings graph |> List.map fst |> SS.of_list in
-  let s = SM.bindings graph |> List.map fst |> SS.of_list in
+  let g_set_minus_s = SM.bindings graph |> List.map fst |> SS.of_list in
   let count_neighbors_not_in_s s node =
     let g_v = SM.find node graph |> SS.of_list in
-    SS.cardinal g_v - (SS.inter s g_v |> SS.cardinal)
+    set_minus_size g_v s
   in
   let num_uniq s =
     SS.fold (fun node acc -> count_neighbors_not_in_s s node + acc) s 0
@@ -106,5 +108,5 @@ let part_one file =
         in
         aux (SS.remove to_remove s)
   in
-  let s' = aux s in
-  SS.cardinal s' * (SS.cardinal nodes - (SS.cardinal @@ SS.inter nodes s'))
+  let s' = aux g_set_minus_s in
+  SS.cardinal s' * set_minus_size nodes s'
