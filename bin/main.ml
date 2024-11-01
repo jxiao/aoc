@@ -44,6 +44,14 @@ module IM = Map.Make (Int)
 type problem = { p1 : string -> int; p2 : string -> int }
 type part = P1 | P2
 
+let part_of_int = function
+  | 1 -> P1
+  | 2 -> P2
+  | d ->
+      raise
+      @@ Invalid_argument (Printf.sprintf "Part must be 1 or 2. Got: %d" d)
+
+let string_of_part = function P1 -> "1" | P2 -> "2"
 let year_to_str = function Y2023 -> "2023" | Y2024 -> "2024"
 
 let str_to_year = function
@@ -51,32 +59,41 @@ let str_to_year = function
   | "2024" -> Y2024
   | _ -> raise @@ Invalid_argument "Unknown year string."
 
-let int_opt_to_string opt =
-  match opt with Some v -> string_of_int v | None -> "N/A"
+let opt_to_string f opt = match opt with Some v -> f v | None -> "N/A"
+let command_line_args = parse_command_line_args ()
 
-let print_header y d p =
+let yr, day, part =
+  let y =
+    match FM.find_opt Year command_line_args with
+    | None -> None
+    | Some years -> Some (List.hd years |> str_to_year)
+  in
+  let d =
+    match FM.find_opt Day command_line_args with
+    | None -> None
+    | Some days -> Some (List.hd days |> int_of_string)
+  in
+  let p =
+    match FM.find_opt Part command_line_args with
+    | None -> None
+    | Some parts -> Some (List.hd parts |> int_of_string |> part_of_int)
+  in
+  (y, d, p)
+
+let print_header () =
   Printf.printf
     "Running `main.ml` with the following optional args:\n\
      \tYear:\t%s\n\
      \tDay:\t%s\n\
      \tPart:\t%s\n\n\
      %!"
-    (int_opt_to_string y) (int_opt_to_string d) (int_opt_to_string p)
+    (opt_to_string year_to_str yr)
+    (opt_to_string string_of_int day)
+    (opt_to_string string_of_part part)
+;;
 
-(* Note: first arg is always the executable file path. Ignored. *)
-let yr, day, part =
-  match Sys.argv |> Array.to_list with
-  | _ :: y :: d :: p :: _ ->
-      (str_to_year y, int_of_string_opt d, int_of_string_opt p)
-  | [ _; y ] -> (str_to_year y, None, None)
-  | [ _; y; d ] -> (str_to_year y, int_of_string_opt d, None)
-  | _ -> (Y2023, None, None)
+print_header ()
 
-let command_line_args = parse_command_line_args ();;
-
-print_header day part
-
-let print_result d p ans = Printf.printf "Day %i, Part %i = %i\n%!" d p ans
 let filepath y = Printf.sprintf "files/%s/day%d.txt" @@ year_to_str y
 
 let modules =
@@ -109,29 +126,76 @@ let modules =
             (22, { p1 = Y2023.Day22.part_one; p2 = Y2023.Day22.part_two });
             (23, { p1 = Y2023.Day23.part_one; p2 = Y2023.Day23.part_two });
             (24, { p1 = Y2023.Day24.part_one; p2 = Y2023.Day24.part_two });
-            (25, { p1 = Y2023.Day25.part_one; p2 = failwith "Merry X-Mas!" });
+            ( 25,
+              {
+                p1 = Y2023.Day25.part_one;
+                p2 = (fun _ -> failwith "Merry X-Mas!");
+              } );
           ] );
     ]
 
-let exec_day y d parts =
-  let path = filepath y d in
-  match part with
-  | Some part ->
-      if List.length parts >= part then
-        List.nth parts (part - 1) path |> print_result d part
-  | None -> List.iteri (fun i f -> f path |> print_result d (i + 1)) parts
-;;
+type result = { day : int; part : part; answer : int; time : float }
 
-match YM.find_opt yr modules with
-| None ->
-    raise
-    @@ Invalid_argument
-         (Printf.sprintf "Cannot find modules for year %s" (year_to_str yr))
-| Some mods -> ( match day with None -> exec_day yr d)
+let benchmark f =
+  let start = Sys.time () in
+  let ans = f () in
+  let finish = Sys.time () in
+  (ans, finish -. start)
 
-(* List.iter
-   (fun (d, fs) ->
-     match day with
-     | Some day -> if day = d then exec_day yr d fs
-     | None -> exec_day yr d fs)
-   modules *)
+let exec_part mods day part =
+  let path = filepath Y2023 day in
+  match (IM.find_opt day mods, part) with
+  | Some { p1; _ }, P1 ->
+      let answer, time = benchmark (fun () -> p1 path) in
+      { day; part = P1; answer; time }
+  | Some { p2; _ }, P2 ->
+      if day <> 25 then
+        let answer, time = benchmark (fun () -> p2 path) in
+        { day; part = P2; answer; time }
+      else { day; part = P2; answer = 0; time = 0. }
+  | None, _ ->
+      raise
+      @@ Invalid_argument (Printf.sprintf "Cannot find day %d in mods." day)
+
+let len = 89
+
+let print_result { day; part; answer; time } =
+  let ans_str = string_of_int answer in
+  Printf.printf "|\t%i\t|\t%s\t|\t%i%s\t\t|\t%.5fs\t|\n" day
+    (string_of_part part) answer
+    (if String.length ans_str < 8 then "\t" else "")
+    time;
+  print_endline (String.init len (fun _ -> '-'))
+
+let print_table_header () =
+  print_endline (String.init len (fun _ -> '='));
+  print_endline
+    "||     DAY\t|      PART\t|\tANSWER\t\t\t|         TIME         ||";
+  print_endline (String.init len (fun _ -> '='))
+
+let exec_year year =
+  match YM.find_opt year modules with
+  | None ->
+      raise
+      @@ Invalid_argument
+           (Printf.sprintf "Cannot find modules for year %s" (year_to_str year))
+  | Some mods -> (
+      print_table_header ();
+      match (day, part) with
+      | None, None ->
+          IM.bindings mods
+          |> List.iter (fun (d, _) ->
+                 print_result @@ exec_part mods d P1;
+                 print_result @@ exec_part mods d P2)
+      | Some d, Some p -> print_result @@ exec_part mods d p
+      | Some d, None ->
+          print_result @@ exec_part mods d P1;
+          print_result @@ exec_part mods d P2
+      | None, Some p ->
+          IM.bindings mods
+          |> List.iter (fun (d, _) -> print_result @@ exec_part mods d p))
+
+let () =
+  match yr with
+  | None -> YM.iter (fun year _ -> exec_year year) modules
+  | Some year -> exec_year year
