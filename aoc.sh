@@ -3,7 +3,10 @@ AOC_COOKIE=""
 
 aos-py () {
     cd $AOC;
-    if [ $1 ]
+    if [ $3 ]
+    then
+        python3 "lib/$1/day$2.py" $3 < "files/$1/day$2.txt"
+    elif [ $1 ]
     then
         python3 "lib/$1/day$2.py" < "files/$1/day$2.txt"
     else
@@ -38,7 +41,10 @@ aos () {
 
 aot-py () {
     cd $AOC;
-    if [ $1 ]
+    if [ $3 ]
+    then
+        python3 "lib/$1/day$2.py" $3 < "test.txt"
+    elif [ $1 ]
     then
         python3 "lib/$1/day$2.py" < "test.txt"
     else
@@ -79,8 +85,13 @@ setup () {
         curl --cookie "session=$AOC_COOKIE" https://adventofcode.com/$1/day/$2/input > files/$1/day$2.txt
 
         mkdir -p "lib/$1"
-        touch "lib/$1/day$2.ml"
-        touch "lib/$1/day$2.py"
+        if [ ! -f "lib/$1/day$2.ml" ]; then
+            cp template.ml "lib/$1/day$2.ml"
+        fi
+
+        if [ ! -f "lib/$1/day$2.py" ]; then
+            cp template.py "lib/$1/day$2.py"
+        fi
     else
         YEAR=$(date +%Y)
         DAY=$(date +%-d)
@@ -89,6 +100,13 @@ setup () {
 
         mkdir -p "lib/$YEAR"
         touch "lib/$YEAR/day$DAY.ml"
-        touch "lib/$YEAR/day$DAY.py"
+
+        if [ ! -f "lib/$YEAR/day$DAY.ml" ]; then
+            cp template.ml "lib/$YEAR/day$DAY.ml"
+        fi
+
+        if [ ! -f "lib/$YEAR/day$DAY.py" ]; then
+            cp template.py "lib/$YEAR/day$DAY.py"
+        fi
     fi
 }
