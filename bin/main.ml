@@ -1,6 +1,6 @@
 let flag_opt_prefix = "-"
 
-type flag = Year | Day | Part
+type flag = Year | Day | Part | FileFn
 
 module FM = Map.Make (struct
   type t = flag
@@ -12,6 +12,7 @@ let flag_of_string = function
   | "-y" -> Year
   | "-d" -> Day
   | "-p" -> Part
+  | "-f" -> FileFn
   | _ -> raise @@ Invalid_argument "Cannot parse string to flag"
 
 let parse_command_line_args () =
@@ -61,8 +62,9 @@ let str_to_year = function
 
 let opt_to_string f opt = match opt with Some v -> f v | None -> "N/A"
 let command_line_args = parse_command_line_args ()
+let filepath y = Printf.sprintf "files/%s/day%d.txt" @@ year_to_str y
 
-let yr, day, part =
+let yr, day, part, filefn =
   let y =
     match FM.find_opt Year command_line_args with
     | None -> None
@@ -78,23 +80,33 @@ let yr, day, part =
     | None -> None
     | Some parts -> Some (List.hd parts |> int_of_string |> part_of_int)
   in
-  (y, d, p)
+  let f =
+    match FM.find_opt FileFn command_line_args with
+    | None -> None
+    | Some parts -> Some (fun _ _ -> List.hd parts)
+  in
+  (y, d, p, f)
 
 let print_header () =
   Printf.printf
     "Running `main.ml` with the following optional args:\n\
      \tYear:\t%s\n\
      \tDay:\t%s\n\
-     \tPart:\t%s\n\n\
+     \tPart:\t%s\n\
+     \tFileFn:\t%s\n\n\
      %!"
     (opt_to_string year_to_str yr)
     (opt_to_string string_of_int day)
     (opt_to_string string_of_part part)
+    (opt_to_string
+       (fun f ->
+         f
+           (match yr with None -> failwith "None" | Some y -> y)
+           (match day with None -> failwith "None" | Some d -> d))
+       filefn)
 ;;
 
 print_header ()
-
-let filepath y = Printf.sprintf "files/%s/day%d.txt" @@ year_to_str y
 
 let modules =
   YM.of_list
@@ -142,8 +154,8 @@ let benchmark f =
   let finish = Sys.time () in
   (ans, finish -. start)
 
-let exec_part mods day part =
-  let path = filepath Y2023 day in
+let exec_part mods year day part filefn =
+  let path = filefn year day in
   match (IM.find_opt day mods, part) with
   | Some { p1; _ }, P1 ->
       let answer, time = benchmark (fun () -> p1 path) in
@@ -181,19 +193,21 @@ let exec_year year =
            (Printf.sprintf "Cannot find modules for year %s" (year_to_str year))
   | Some mods -> (
       print_table_header ();
+      let fn = match filefn with None -> filepath | Some f -> f in
       match (day, part) with
       | None, None ->
           IM.bindings mods
           |> List.iter (fun (d, _) ->
-                 print_result @@ exec_part mods d P1;
-                 print_result @@ exec_part mods d P2)
-      | Some d, Some p -> print_result @@ exec_part mods d p
+                 print_result @@ exec_part mods year d P1 fn;
+                 print_result @@ exec_part mods year d P2 fn)
+      | Some d, Some p -> print_result @@ exec_part mods year d p fn
       | Some d, None ->
-          print_result @@ exec_part mods d P1;
-          print_result @@ exec_part mods d P2
+          print_result @@ exec_part mods year d P1 fn;
+          print_result @@ exec_part mods year d P2 fn
       | None, Some p ->
           IM.bindings mods
-          |> List.iter (fun (d, _) -> print_result @@ exec_part mods d p))
+          |> List.iter (fun (d, _) ->
+                 print_result @@ exec_part mods year d p fn))
 
 let () =
   match yr with

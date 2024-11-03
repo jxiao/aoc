@@ -205,7 +205,6 @@ let furthest_cycle pipes start =
   |> List.fold_left max Int.min_int
 
 let part_one file =
-  Common.hello_world ();
   let lines = file_lines file in
   match pipes lines with
   | _, None -> Invalid_argument "No start found." |> raise
