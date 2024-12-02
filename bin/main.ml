@@ -144,6 +144,9 @@ let modules =
                 p2 = (fun _ -> failwith "Merry X-Mas!");
               } );
           ] );
+      ( Y2024,
+        IM.of_list
+          [ (1, { p1 = Y2024.Day1.part_one; p2 = Y2024.Day1.part_two }) ] );
     ]
 
 type result = { day : int; part : part; answer : int; time : float }
