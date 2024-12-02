@@ -258,7 +258,6 @@ let part_one file =
       (modules, { low = 0; high = 0 })
       (List.init 1000 Fun.id)
   in
-  Printf.printf "low=%d \t high=%d\n%!" counts.low counts.high;
   counts.low * counts.high
 
 (*

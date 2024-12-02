@@ -1,0 +1,3 @@
+(library
+ (name Y2024)
+ (libraries common))

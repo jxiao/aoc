@@ -7,9 +7,9 @@
 (source
  (github username/reponame))
 
-(authors "Author Name")
+(authors "Jeffrey Xiao")
 
-(maintainers "Maintainer Name")
+(maintainers "Jeffrey Xiao")
 
 (license LICENSE)
 
